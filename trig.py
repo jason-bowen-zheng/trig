@@ -3,6 +3,7 @@ import math
 if __import__("sys").platform != "win32":
     import readline
 
+D = None
 # 表示圆周率的字符
 pi_s = chr(960)
 # 特殊的三角方程的解集
@@ -65,6 +66,8 @@ def get_rad(value, always_p=False):
                         return "-" + pi_s + "/6"
                     else:
                         return "%s%s/%d" % (b if abs(b) != 1 else str(b).replace("1", ""), pi_s, a)
+    else:
+        return str(value)
 
 def get_trig(name, value):
     """返回一个三角比的值对应的弧度（一般情况下是两个）
@@ -83,56 +86,21 @@ def get_trig(name, value):
             result.append([get_rad(i), i])
     return result
 
-def get_num(s):
-    flag = 1
-    if s[0] == "-":
-        flag = -1
-        s = s[1:]
-    if s.startswith("sqrt(") and s[-1] == ")":
-        return flag * math.sqrt(float(s[5:-1]))
-    else:
-        return flag * float(s)
-
-def get_value(s):
-    a, b = 0, 0
-    if "/" in s:
-        a, b = [get_num(n) for n in s.split("/", 1)]
-    else:
-        a, b = get_num(s), 1
-    return a / b
-
-def format_string(s):
-    v = get_value(s)
-    if getattr("", "removeprefix", None) is None:
-        s = s.replace("-", "")
-        if v < 0:
-            s = "-" + s
-        return s
-    if "/" not in s:
-        return s
-    else:
-        a, b = s.split("/")
-        if v == int(v):
-            return str(int(v))
-        if v > 0:
-            return "%s/%s" % (a.removeprefix("-"), b.removeprefix("-"))
-        elif v < 0:
-            return "%s/%s" % ("-" + a.removeprefix("-"), b.removeprefix("-"))
-
 def equ(name, s):
     """求解三角方程
 
     @param name 三角比名
     @param s 值
     """
+    global D
     name, s = name.strip(), s.strip()
-    if name == "s": f = math.asin
-    elif name == "c": f = math.acos
-    elif name == "t": f = math.atan
+    if name == "sin": f = math.asin; name = "s"
+    elif name == "cos": f = math.acos; name = "c"
+    elif name == "tan": f = math.atan; name = "t"
     else: return
     try:
-        value = get_value(s)
-        s = format_string(s)
+        # 我就不再写一个解析器了，直接用就可以了
+        value = float(eval(s, {"sqrt": math.sqrt, "pi": math.pi, "__builtins__": {}}))
     except:
         print("Error: An invalid number!")
         return
@@ -151,31 +119,45 @@ def equ(name, s):
     if (v := get_rad(a)) is not None:
         # 可使用弧度表示的解集
         if name == "s":
+            formula = ["k * math.pi + (-1) ** k * %s" % a]
             if a > 0:
                 print("x = k%s + (-1)^k * %s" % (pi_s, v))
-            elif  a < 0:
+            elif a < 0:
                 print("x = k%s - (-1)^k * %s" % (pi_s, v[1:]))
         elif name == "c":
+            formula = ["k * math.tau + %s" % a, "k * math.tau + %s" % a]
             print("x = 2k%s %s %s" % (pi_s, chr(177), v))
         elif name == "t":
+            formula = ["k * math.pi + %s" % a]
             if a > 0:
                 print("x = k%s + %s" % (pi_s, v))
             elif a < 0:
                 print("x = k%s - %s" % (pi_s, v[1:]))
+        # 如若设置了定义域，那么就在定义域内找解
+        if D is not None:
+            result = []
+            for expr in formula:
+                if (D[0] <= (x := eval(expr.replace("k", "(0)"))) <= D[1]):
+                    result.append(get_rad(x))
+                i, flag = 1, 1
+                while True:
+                    if (D[0] <= (x := eval(expr.replace("k", "(%s)" % i))) <= D[1]):
+                        if get_rad(x) not in result:
+                            result.append(get_rad(x))
+                        i += flag * 1
+                    else:
+                        if flag == -1: break
+                        i, flag = 1, -1
+            print("{%s}" % ", ".join(result))
+            D = None
     else:
         # 如上述方法不可行，则使用反三角表示
         if name == "s":
-            if a > 0:
-                print("x = k%s + (-1)^k * arcsin(%s)" % (pi_s, s))
-            elif a < 0:
-                print("x = k%s - (-1)^k * arcsin(%s)" % (pi_s, s[1:]))
+            print("x = k%s + (-1)^k * arcsin(%s)" % (pi_s, s))
         elif name == "c":
             print("x = 2k%s %s arccos(%s)" % (pi_s, chr(177), s))
         elif name == "t":
-            if a > 0:
-                print("x = k%s + arctan(%s)" % (pi_s, s))
-            elif a < 0:
-                print("x = k%s - arctan(%s)" % (pi_s, s[1:]))
+            print("x = k%s + arctan(%s)" % (pi_s, s))
 
 def inequ(name, s, op):
     """求解三角不等式
@@ -185,12 +167,12 @@ def inequ(name, s, op):
     @param op 不等号
     """
     name, s = name.strip(), s.strip()
-    if name == "s": f = math.asin
-    elif name == "c": f = math.acos
-    elif name == "t": f = math.atan
+    if name == "sin": f = math.asin; name = "s"
+    elif name == "cos": f = math.acos; name = "c"
+    elif name == "tan": f = math.atan; name = "t"
     else: return
     try:
-        value = get_value(s)
+        value = float(eval(s, {"sqrt": math.sqrt, "pi": math.pi, "__builtins__": {}}))
     except:
         print("Error: An invalid number!")
         return
@@ -199,56 +181,73 @@ def inequ(name, s, op):
     except ValueError:
         print("Error: Domain error!")
         return
+    get_open = lambda: "(" if "=" not in op else "["
+    get_close = lambda: ")" if "=" not in op else "]"
     # sin和cos较麻烦，除了最后的print就别想看懂了
     if name == "s":
-        if math.isclose(abs(value), 1):
-            # 根据图像可知，y=sin(x)没有一点的函数值大于1
-            print("No solution")
-            return
         x1, x2 = get_trig("s", value)
-        if (op == "<"):
+        if ("<" in op):
             x1, x2 = x2, x1
             if value > 0:
                 x1 = [get_rad(-math.tau + x1[1], True), -math.tau + x1[1]]
             elif value < 0:
                 x2 = [get_rad(x2[1] + math.tau, True), x2[1] + math.tau]
-        if (op == "<") and math.isclose(value, 0):
+        if ("<" in op) and math.isclose(value, 0):
             # sin(x)<0
-            print("(2k%s-%s, 2k%s)" % ((pi_s, ) * 3))
+            print("%s2k%s-%s, 2k%s%s" % ((get_open(), ) + (pi_s, ) * 3) + (get_close(), ))
             return
-        print("(2k%s%s%s, 2k%s%s%s)" % (pi_s, "+" if x1[1] > 0 else "", x1[0] if x1[1] != 0 else "", pi_s, "+" if x2[1] > 0 else "", x2[0]))
+        print("%s2k%s%s%s, 2k%s%s%s%s" % (get_open(), pi_s, "+" if x1[1] > 0 else "", x1[0] if x1[1] != 0 else "", pi_s, "+" if x2[1] > 0 else "", x2[0], get_close()))
     if name == "c":
-        if math.isclose(abs(value), 1):
-            # 同上，y=cos(x)亦没有一点的函数值大于1
-            print("No solution")
-            return
         x1, x2 = get_trig("c", value)
-        if (op == "<") and (value > 0) and (x2[1] > x1[1]):
+        if ("<" in op) and (value > 0) and (x2[1] > x1[1]):
                 x1, x2 = x2, x1
                 x2 = [get_rad(x2[1] + math.tau, True), x2[1] + math.tau]
-        elif (op == ">") and (value < 0):
+        elif (">" in op) and (value < 0):
                 x1, x2 = x2, x1
                 x1 = [get_rad(-math.tau + x1[1], True), -math.tau + x1[1]]
-        if (op == "<") and math.isclose(value, 0):
+        if ("<" in op) and math.isclose(value, 0):
             # cos(x)<0
-            print("(2k%s+%s/2, 2k%s+3%s/2)" % ((pi_s, ) * 4))
+            print("%s2k%s+%s/2, 2k%s+3%s/2%s" % ((get_open(), ) + (pi_s, ) * 4) + (get_close(), ))
             return
-        print("(2k%s%s%s, 2k%s%s%s)" % (pi_s, "+" if x1[1] >= 0 else "", x1[0], pi_s, "+" if x2[1] > 0 else "", x2[0]))
+        print("%s2k%s%s%s, 2k%s%s%s%s" % (get_open(), pi_s, "+" if x1[1] >= 0 else "", x1[0], pi_s, "+" if x2[1] > 0 else "", x2[0], get_close()))
     if name == "t":
         # tan最简单，看函数图像即可出结果
-        if op == ">":
-            print("(k%s%s%s, k%s+%s/2)" % (pi_s, "+" if a >= 0 else "", get_rad(a), pi_s, pi_s))
-        elif op == "<":
-            print("(k%s+%s/2, k%s%s%s)" % (pi_s, pi_s, pi_s, "+" if a >= 0 else "", get_rad(a)))
+        if ">" in op:
+            print("%sk%s%s%s, k%s+%s/2)" % (get_open(), pi_s, "+" if a >= 0 else "", get_rad(a), pi_s, pi_s))
+        elif "<" in op:
+            print("(k%s+%s/2, k%s%s%s%s" % (pi_s, pi_s, pi_s, "+" if a >= 0 else "", get_rad(a), get_close()))
+
+def set_var(name, *args):
+    global D
+    if name == "D":
+        if len(args) == 2:
+            try:
+                s, e = [float(eval(s, {"sqrt": math.sqrt, "pi": math.pi, "__builtins__": {}})) for s in args]
+                if s > e:
+                    s, e = e, s
+                D = [s, e]
+            except:
+                print("Error: An invalid number!")
 
 if __name__ == "__main__":
     while True:
-        expr = input("expr: ")
-        if "=" in expr:
-            equ(*expr.split("=")[:2])
-        elif ">" in expr:
-            inequ(*expr.split(">")[:2], ">")
-        elif "<" in expr:
-            inequ(*expr.split("<")[:2], "<")
-        elif expr == "q":
-            exit()
+        cmd = input(">>> ").split(" ", 1)
+        if len(cmd) == 1:
+            action = cmd[0]
+            if action == "q":
+                exit()
+        else:
+            action, args = cmd
+            if action == "do":
+                if ("=" in args) and (">=" not in args) and ("<=" not in args):
+                    equ(*args.split("=")[:2])
+                elif (">" in args) and (">=" not in args):
+                    inequ(*args.split(">", 1), ">")
+                elif (">=" in args):
+                    inequ(*args.split(">=", 1), ">=")
+                elif ("<" in args) and ("<=" not in args):
+                    inequ(*args.split("<", 1), "<")
+                elif ("<=" in args):
+                    inequ(*args.split("<=", 1), "<")
+            elif action == "set":
+                set_var(*args.split(" "))
