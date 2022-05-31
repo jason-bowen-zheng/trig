@@ -3,6 +3,7 @@ import math
 if __import__("sys").platform != "win32":
     import readline
 
+# 定义域，通过set_var函数修改
 D = None
 # 表示圆周率的字符
 pi_s = chr(960)
@@ -181,6 +182,7 @@ def inequ(name, s, op):
     except ValueError:
         print("Error: Domain error!")
         return
+    # 根据不等号设置区间开闭
     get_open = lambda: "(" if "=" not in op else "["
     get_close = lambda: ")" if "=" not in op else "]"
     # sin和cos较麻烦，除了最后的print就别想看懂了
