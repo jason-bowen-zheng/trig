@@ -89,8 +89,6 @@ def get_rad(value, always_p=False):
                         return "-" + pi_s + "/6"
                     else:
                         return "%s%s/%d" % (b if abs(b) != 1 else str(b).replace("1", ""), pi_s, a)
-    else:
-        return str(value)
 
 def get_trig(name, value):
     """返回一个三角比的值对应的弧度（一般情况下是两个）
@@ -162,15 +160,21 @@ def equ(name, s):
                 print("x = k%s - %s" % (pi_s, get_rad(-a)))
         # 如若设置了定义域，那么就在定义域内找解
         if D is not None:
-            result = []
+            first, last, result = 0, 0, []
             for expr in formula:
                 if (D[0] <= (x := eval(expr.replace("k", "(0)"))) <= D[1]):
                     result.append(get_rad(x))
+                    first, last = x, x
                 i, flag = 1, 1
                 while True:
                     if (D[0] <= (x := eval(expr.replace("k", "(%s)" % i))) <= D[1]):
                         if get_rad(x) not in result:
-                            result.append(get_rad(x))
+                            if x > last:
+                                result.append(get_rad(x))
+                                last = x
+                            elif x < first:
+                                result.insert(0, get_rad(x))
+                                first = x
                         i += flag * 1
                     else:
                         if flag == -1: break
