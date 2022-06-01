@@ -149,7 +149,7 @@ def equ(name, s):
                     else:
                         if flag == -1: break
                         i, flag = 1, -1
-            print("{%s}" % ", ".join(result))
+            print("Solution in D: {%s}" % ", ".join(result))
             D = None
     else:
         # 如上述方法不可行，则使用反三角表示
