@@ -108,7 +108,7 @@ def get_trig(name, value):
     return result
 
 def trig_eval(s):
-    # 某safe-eval
+    # 解析器就不写了，直接用就可以了
     return eval(s, {"sqrt": math.sqrt, "pi": math.pi, "__builtins__": {}})
 
 def equ(name, s):
@@ -124,8 +124,7 @@ def equ(name, s):
     elif name == "tan": f = math.atan; name = "t"
     else: return
     try:
-        # 我就不再写一个解析器了，直接用就可以了
-        value = float(eval(s, {"sqrt": math.sqrt, "pi": math.pi, "__builtins__": {}}))
+        value = float(trig_eval(s))
     except:
         print("Error: An invalid number!")
         return
@@ -215,9 +214,10 @@ def inequ(name, s, op):
     # 根据不等号设置区间开闭
     get_open = lambda: "(" if "=" not in op else "["
     get_close = lambda: ")" if "=" not in op else "]"
-    # sin和cos较麻烦，除了最后的print就别想看懂了
+    # sin和cos较麻烦，除了最后的print就别想看懂了（尽管有很多注释，但是不借助单位圆绝对无法理解）
     if name == "s":
         if abs(value) == 1:
+            # 对于极值的处理
             if (op == ">=") and (value == 1): print("x = 2k%s + %s" % (pi_s, pi_s))
             elif (op == ">=") and (value == -1): print("x = R")
             elif (op == ">") and (value == 1): print("x = %s" % chr(8709))
@@ -225,6 +225,7 @@ def inequ(name, s, op):
             return
         x1, x2 = get_trig("s", value)
         if ("<" in op):
+            # 解集是逆时针找出的，需对调始终边
             x1, x2 = x2, x1
             if value > 0:
                 # 此时解集穿过x轴正半轴，需表示成(2*k*pi-a, 2*k*pi+b)
@@ -233,7 +234,6 @@ def inequ(name, s, op):
                 # 此时终小于始，需调整
                 x2 = [get_rad(x2[1] + math.tau, True), x2[1] + math.tau]
         if value == 0:
-            # sin(x)<0
             print("%s2k%s-%s, 2k%s%s" % ((get_open(), ) + (pi_s, ) * 3) + (get_close(), ))
         else:
             print("%s2k%s%s%s, 2k%s%s%s%s" % (get_open(), pi_s, "+" if x1[1] > 0 else "", x1[0] if x1[1] != 0 else "", pi_s, "+" if x2[1] > 0 else "", x2[0], get_close()))
@@ -254,7 +254,6 @@ def inequ(name, s, op):
             x1, x2 = x2, x1
             x1 = [get_rad(-math.tau + x1[1], True), -math.tau + x1[1]]
         if ("<" in op) and (value == 0):
-            # cos(x)<0
             print("%s2k%s+%s/2, 2k%s+3%s/2%s" % ((get_open(), ) + (pi_s, ) * 4) + (get_close(), ))
         else:
             print("%s2k%s%s%s, 2k%s%s%s%s" % (get_open(), pi_s, "+" if x1[1] >= 0 else "", x1[0], pi_s, "+" if x2[1] > 0 else "", x2[0], get_close()))
