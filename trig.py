@@ -1,4 +1,26 @@
 #!/usr/bin/env python3
+# MIT License
+#
+# Copyright (c) 2022 jason-bowen-zheng
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import math
 if __import__("sys").platform != "win32":
     import readline
@@ -87,6 +109,10 @@ def get_trig(name, value):
             result.append([get_rad(i), i])
     return result
 
+def trig_eval(s):
+    # 某safe-eval
+    return eval(s, {"sqrt": math.sqrt, "pi": math.pi, "__builtins__": {}})
+
 def equ(name, s):
     """求解三角方程
 
@@ -124,7 +150,7 @@ def equ(name, s):
             if a > 0:
                 print("x = k%s + (-1)^k * %s" % (pi_s, v))
             elif a < 0:
-                print("x = k%s - (-1)^k * %s" % (pi_s, v[1:]))
+                print("x = k%s - (-1)^k * %s" % (pi_s, get_rad(-a)))
         elif name == "c":
             formula = ["k * math.tau + %s" % a, "k * math.tau + %s" % a]
             print("x = 2k%s %s %s" % (pi_s, chr(177), v))
@@ -133,7 +159,7 @@ def equ(name, s):
             if a > 0:
                 print("x = k%s + %s" % (pi_s, v))
             elif a < 0:
-                print("x = k%s - %s" % (pi_s, v[1:]))
+                print("x = k%s - %s" % (pi_s, get_rad(-a)))
         # 如若设置了定义域，那么就在定义域内找解
         if D is not None:
             result = []
@@ -152,7 +178,7 @@ def equ(name, s):
             print("Solution in D: {%s}" % ", ".join(result))
             D = None
     else:
-        # 如上述方法不可行，则使用反三角表示
+        # 如上述方法不可行，则使用反三角表示，反三角不支持寻找定义域内的解
         if name == "s":
             print("x = k%s + (-1)^k * arcsin(%s)" % (pi_s, s))
         elif name == "c":
@@ -173,7 +199,7 @@ def inequ(name, s, op):
     elif name == "tan": f = math.atan; name = "t"
     else: return
     try:
-        value = float(eval(s, {"sqrt": math.sqrt, "pi": math.pi, "__builtins__": {}}))
+        value = float(trig_eval(s))
     except:
         print("Error: An invalid number!")
         return
@@ -187,31 +213,47 @@ def inequ(name, s, op):
     get_close = lambda: ")" if "=" not in op else "]"
     # sin和cos较麻烦，除了最后的print就别想看懂了
     if name == "s":
+        if abs(value) == 1:
+            if (op == ">=") and (value == 1): print("x = 2k%s + %s" % (pi_s, pi_s))
+            elif (op == ">=") and (value == -1): print("x = R")
+            elif (op == ">") and (value == 1): print("x = %s" % chr(8709))
+            elif (op ==">") and (value == -1): print("x %s 2k%s + 3%s/2" % (chr(8800), pi_s, pi_s))
+            return
         x1, x2 = get_trig("s", value)
         if ("<" in op):
             x1, x2 = x2, x1
             if value > 0:
+                # 此时解集穿过x轴正半轴，需表示成(2*k*pi-a, 2*k*pi+b)
                 x1 = [get_rad(-math.tau + x1[1], True), -math.tau + x1[1]]
             elif value < 0:
+                # 此时终小于始，需调整
                 x2 = [get_rad(x2[1] + math.tau, True), x2[1] + math.tau]
-        if ("<" in op) and math.isclose(value, 0):
+        if value == 0:
             # sin(x)<0
             print("%s2k%s-%s, 2k%s%s" % ((get_open(), ) + (pi_s, ) * 3) + (get_close(), ))
-            return
-        print("%s2k%s%s%s, 2k%s%s%s%s" % (get_open(), pi_s, "+" if x1[1] > 0 else "", x1[0] if x1[1] != 0 else "", pi_s, "+" if x2[1] > 0 else "", x2[0], get_close()))
+        else:
+            print("%s2k%s%s%s, 2k%s%s%s%s" % (get_open(), pi_s, "+" if x1[1] > 0 else "", x1[0] if x1[1] != 0 else "", pi_s, "+" if x2[1] > 0 else "", x2[0], get_close()))
     if name == "c":
+        if abs(value) == 1:
+            if (op == ">=") and (value == 1): print("x = 2k%s" % pi_s)
+            elif (op == ">=") and (value == -1): print("x = R")
+            elif (op == ">") and (value == 1): print("x = %s" % chr(8709))
+            elif (op ==">") and (value == -1): print("x %s 2k%s + %s" % (chr(8800), pi_s, pi_s))
+            return
         x1, x2 = get_trig("c", value)
-        if ("<" in op) and (value > 0) and (x2[1] > x1[1]):
-                x1, x2 = x2, x1
-                x2 = [get_rad(x2[1] + math.tau, True), x2[1] + math.tau]
+        if ("<" in op) and (value > 0):
+            # 此时解集为第一象限始边到第四象限终边，但由于上述单位圆特性，需对调始终边
+            x1, x2 = x2, x1
+            x2 = [get_rad(x2[1] + math.tau, True), x2[1] + math.tau]
         elif (">" in op) and (value < 0):
-                x1, x2 = x2, x1
-                x1 = [get_rad(-math.tau + x1[1], True), -math.tau + x1[1]]
-        if ("<" in op) and math.isclose(value, 0):
+            # 此时解集穿过x轴正半轴
+            x1, x2 = x2, x1
+            x1 = [get_rad(-math.tau + x1[1], True), -math.tau + x1[1]]
+        if ("<" in op) and (value == 0):
             # cos(x)<0
             print("%s2k%s+%s/2, 2k%s+3%s/2%s" % ((get_open(), ) + (pi_s, ) * 4) + (get_close(), ))
-            return
-        print("%s2k%s%s%s, 2k%s%s%s%s" % (get_open(), pi_s, "+" if x1[1] >= 0 else "", x1[0], pi_s, "+" if x2[1] > 0 else "", x2[0], get_close()))
+        else:
+            print("%s2k%s%s%s, 2k%s%s%s%s" % (get_open(), pi_s, "+" if x1[1] >= 0 else "", x1[0], pi_s, "+" if x2[1] > 0 else "", x2[0], get_close()))
     if name == "t":
         # tan最简单，看函数图像即可出结果
         if ">" in op:
@@ -224,12 +266,14 @@ def set_var(name, *args):
     if name == "D":
         if len(args) == 2:
             try:
-                s, e = [float(eval(s, {"sqrt": math.sqrt, "pi": math.pi, "__builtins__": {}})) for s in args]
+                s, e = [float(trig_eval(s)) for s in args]
                 if s > e:
                     s, e = e, s
                 D = [s, e]
             except:
                 print("Error: An invalid number!")
+    else:
+        print("Error: No variable named \"%s\"!" % name)
 
 if __name__ == "__main__":
     while True:
