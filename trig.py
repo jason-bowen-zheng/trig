@@ -21,6 +21,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from fractions import Fraction
 import math
 if __import__("sys").platform != "win32":
     import readline
@@ -67,28 +68,27 @@ unit_circle = [
 ]
 
 def get_rad(value, always_p=False):
-    """返回一个弧度字符串（a*pi/b，范围从-30pi到30pi，且局限性大）
+    """返回一个弧度字符串（a*pi/b）
 
     @param value 某浮点数
     @param always_p 返回的弧度是否为正，若为True则返回5pi/3而非-pi/3
     """
     if value == 0: return "0"
-    if math.isclose(math.pi, value): return pi_s
-    if math.isclose(2 * math.pi, value): return "2" + pi_s
-    for a in [2, 3, 4, 6, 12]:
-        for b in range(-60, 61):
-            if math.isclose(b * math.pi / a, value):
-                if always_p:
-                    return "%s%s/%d" % (b if abs(b) != 1 else str(b).replace("1", ""), pi_s, a)
-                else:
-                    if math.isclose(2 * math.pi - math.pi / 3, value):
-                        return "-" + pi_s + "/3"
-                    elif math.isclose(2 * math.pi - math.pi / 4, value):
-                        return "-" + pi_s + "/4"
-                    elif math.isclose(2 * math.pi - math.pi / 6, value):
-                        return "-" + pi_s + "/6"
-                    else:
-                        return "%s%s/%d" % (b if abs(b) != 1 else str(b).replace("1", ""), pi_s, a)
+    frac = Fraction(value / math.pi).limit_denominator(1000)
+    a, b = frac.as_integer_ratio()
+    if math.isclose(value, frac * math.pi):
+        if always_p:
+            return "%s%s/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), pi_s, b)
+        else:
+            if math.isclose((a + 1) / b, 2):
+                return "-%s/%s" % (pi_s, b)
+            else:
+                return "%s%s/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), pi_s, b)
+    else:
+        if math.isclose(value, frac):
+            return "%s%s%s" % (a, "/" if b == 1 else "", b)
+        else:
+            return str(value)
 
 def get_trig(name, value):
     """返回一个三角比的值对应的弧度（一般情况下是两个）
@@ -140,7 +140,7 @@ def equ(name, s):
                 if math.isclose(k, value):
                     print("x = %s" % v)
                     return
-    if (v := get_rad(a)) is not None:
+    if (v := get_rad(a)).find(pi_s) != -1:
         # 可使用弧度表示的解集
         if name == "s":
             formula = ["k * math.pi + (-1) ** k * %s" % a]
