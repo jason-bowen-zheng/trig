@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # MIT License
 #
 # Copyright (c) 2022 jason-bowen-zheng
@@ -21,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from cas import *
+from .cas import *
 from fractions import Fraction
 import math
 if __import__("sys").platform != "win32":
@@ -34,17 +33,17 @@ pi_s = chr(960)
 # 特殊的三角方程的解集
 special = {
     "sin": {
-        -1: "2k%s - %s/2" % (pi_s, pi_s),
-        0: "k" + pi_s,
-        1: "2k%s + %s/2" % (pi_s, pi_s)
+        -1: {"2*k%s" % pi_s: True, "-": False,math.pi / 2: True},
+        0: {"k" + pi_s: True},
+        1: {"2*k%s" % pi_s: True, "+": False, math.pi / 2: True}
     },
     "cos": {
-        -1: "2k%s + %s" % (pi_s, pi_s),
-        0: "k%s + %s/2" % (pi_s, pi_s),
-        1: "2k" + pi_s
+        -1: {"2*k%s" % pi_s: True, "+": False, math.pi: True},
+        0: {"k%s" % pi_s: True, "+": False, math.pi / 2: True},
+        1: {"2*k" + pi_s: True}
     },
     "tan": {
-        0: "k" + pi_s
+        0: {"k" + pi_s: True}
     }
 }
 # 单位圆的弧度圈，逆时针方向，从-pi/2开始
@@ -103,7 +102,12 @@ def trig_eval(s, left=False):
         return eval(s, {"sqrt": math.sqrt, "pi": math.pi, "__builtins__": {}})
 
 def build_sol(expr, left):
-    x_coeff = left.args[0].coeff
+    """根据左值和最简方程的解构建最终解
+
+    @param expr 包含解的字典
+    @param left 左值
+    """
+    x_coeff = left.args[0].args[0] if isinstance(left.args[0], Mul) else 1
     result = []
     for item, action in expr.items():
         if action == False:
@@ -126,6 +130,10 @@ def is_simplest(expr):
         raise RuntimeError()
     elif isinstance(expr.args[0], Variable):
         return True
+    elif isinstance(expr.args[0], Mul):
+        if len(expr.args[0].args) == 2:
+            if isinstance(expr.args[0].args[1], Variable):
+                return True
     return False
 
 def equ(expr, val):
@@ -157,11 +165,11 @@ def equ(expr, val):
         if left.name == tn:
             for k, v in kv.items():
                 if math.isclose(k, val):
-                    print("x = %s" % v)
+                    print("x = %s" % build_sol(v, left))
                     return
     if get_num_string(sol).find(pi_s) != -1:
         # 可使用弧度表示的解集
-        coeff = left.args[0].coeff
+        coeff = left.args[0].args[0] if isinstance(left.args[0], Mul) else 1
         if left.name == "sin":
             formula = ["(k * math.pi + (-1) ** k * %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else "")]
             print("x = " + build_sol({
@@ -342,3 +350,4 @@ if __name__ == "__main__":
                     inequ(*args.split("<=", 1), "<")
             elif action == "set":
                 set_var(*args.split(" "))
+

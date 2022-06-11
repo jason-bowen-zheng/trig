@@ -66,23 +66,31 @@ class Add(object):
     """几个代数式之和"""
 
     def __init__(self, *args):
-        self.args = list(args)
+        prefix, result = 0, []
+        for item in args:
+            if isinstance(item, (int, float)):
+                prefix += item
+            else:
+                result.append(item)
+        self.args = result + [prefix]
 
     def __add__(self, other):
         if isinstance(other, (int, float)) and isinstance(self.args[-1], (int, float)):
             self.args[-1] += other
         elif isinstance(other, (int, float, Function, Variable)):
             self.args.append(other)
-            return self
-        raise TypeError()
+        else:
+            raise TypeError()
+        return self
 
     def __radd__(self, other):
         if isinstance(other, (int, float)) and isinstance(self.args[-1], (int, float)):
             self.args[-1] += other
         elif isinstance(other, (int, float, Function, Variable)):
             self.args.insert(0, other)
-            return self
-        raise TypeError()
+        else:
+            raise TypeError()
+        return self
 
     def __sub__(self, other):
         if isinstance(other, (int, float)) and isinstance(self.args[-1], (int, float)):
@@ -102,12 +110,69 @@ class Add(object):
                 else:
                     result.append(get_num_string(item))
             else:
-                if item.coeff > 0:
-                    result.append(("+" if not first else "") + repr(item))
-                else:
-                    result.append(get_num_string(item, True))
+                result.append(repr(item))
             first = False
         return "".join(result)
+
+
+class Mul(object):
+    """几个代数式之积"""
+
+    def __init__(self, *args):
+        self.args = list(args)
+        prefix, result = 1, []
+        for item in args:
+            if isinstance(item, (int, float)):
+                prefix *= item
+            else:
+                result.append(item)
+        self.args = [prefix] + result
+
+    def __add__(self, other):
+        return Add(self, other)
+
+    def __radd__(self, other):
+        return Add(other, self)
+
+    def __sub__(self, other):
+        return Add(self, -other)
+
+    def __mul__(self, other):
+        if isinstance(other, (int, float)) and isinstance(self.args[0], (int, float)):
+            self.args[0] *= other
+        elif isinstance(other, (int, float)):
+            self.args.insert(0, other)
+        elif isinstance(other, (Function, Variable)):
+            self.args.append(other)
+        else:
+            raise TypeError()
+        return self
+
+    def __rmul__(self, other):
+        if isinstance(other, (int, float)) and isinstance(self.args[0], (int, float)):
+            self.args[0] *= other
+        elif isinstance(other, (int, float)):
+            self.args.insert(0, other)
+        elif isinstance(other, (Function, Variable)):
+            self.args.append(other)
+        else:
+            raise TypeError()
+        return self
+
+    def __repr__(self):
+        result = []
+        for item in self.args:
+            if isinstance(item, (int, float)):
+                if item > 0:
+                    result.append(get_num_string(item, True))
+                else:
+                    result.append("(%s)" % get_num_string(item, True))
+            else:
+                if isinstance(item, Add):
+                    result.append("(%s)" % repr(item))
+                else:
+                    result.append(repr(item))
+        return "*".join(result)
 
 
 class Function(object):
@@ -116,7 +181,6 @@ class Function(object):
     def __init__(self, *args):
         self.name = "func"
         self.args = args
-        self.coeff = 1
 
     def __add__(self, other):
         return Add(self, other)
@@ -131,18 +195,10 @@ class Function(object):
         return Add(other, -self)
 
     def __mul__(self, other):
-        if isinstance(other, (int, float)):
-            self.coeff *= other
-            return self
-        else:
-            raise TypeError()
+        return Mul(self, other)
 
     def __rmul__(self, other):
-        if isinstance(other, (int, float)):
-            self.coeff *= other
-            return self
-        else:
-            raise TypeError()
+        return Mul(other, self)
 
     def __repr__(self):
         args = []
@@ -152,8 +208,7 @@ class Function(object):
             else:
                 args.append(repr(item))
         args = ",".join(args)
-        return "%s%s(%s)" % (get_num_string(self.coeff, True) if abs(self.coeff) != 1 else str(self.coeff).replace("1", ""),
-                self.name, args)
+        return "%s(%s)" % (self.name, args)
 
 
 class Variable(object):
@@ -161,7 +216,6 @@ class Variable(object):
 
     def __init__(self):
         self.name = "x"
-        self.coeff = 1
 
     def __add__(self, other):
         return Add(self, other)
@@ -176,22 +230,13 @@ class Variable(object):
         return Add(other, -self)
 
     def __mul__(self, other):
-        if isinstance(other, (int, float)):
-            self.coeff *= other
-            return self
-        else:
-            raise TypeError()
+        return Mul(self, other)
 
     def __rmul__(self, other):
-        if isinstance(other, (int, float)):
-            self.coeff *= other
-            return self
-        else:
-            raise TypeError()
+        return Mul(other, self) 
 
     def __repr__(self):
-        return "%s%s" % (get_num_string(self.coeff, True) if abs(self.coeff) != 1 else str(self.coeff).replace("1", ""),
-                self.name)
+        return "%s" % self.name
 
 
 class Sine(Function):
