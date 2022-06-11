@@ -21,6 +21,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from cas import *
 from fractions import Fraction
 import math
 if __import__("sys").platform != "win32":
@@ -67,140 +68,10 @@ unit_circle = [
         4 * math.pi / 3
 ]
 
-class Function(object):
-
-    def __init__(self, name, args):
-        assert isinstance(args, Variable)
-        self.name = name
-        self.addend = 0
-        self.coeff = 1
-        self.args = args
-
-    def __add__(self, other):
-        if isinstance(other, (int, float)):
-            self.addend += other
-            return self
-        raise RuntimeError()
-
-    def __radd__(self, other):
-        if isinstance(other, (int, float)):
-            self.addend += other
-            return self
-        raise RuntimeError()
-
-    def __sub__(self, other):
-        if isinstance(other, (int, float)):
-            self.addend -= other
-            return self
-        raise RuntimeError()
-
-    def __rsub__(self, other):
-        if isinstance(other, (int, float)):
-            self.addend -= other
-            return self
-        raise RuntimeError()
-
-    def __mul__(self, other):
-        if isinstance(other, (int, float)):
-            assert other != 0
-            self.coeff *= other
-            return self
-        raise RuntimeError()
-
-    def __rmul__(self, other):
-        if isinstance(other, (int, float)):
-            assert other != 0
-            self.coeff *= other
-            return self
-        raise RuntimeError()
-
-    def __repr__(self):
-        return "%s * %s(%s) + %s" % (self.coeff, self.name, repr(self.args), self.addend)
-
-
-class Variable(object):
-
-    def __init__(self, name="x"):
-        self.name = name
-        self.addend = 0
-        self.coeff = 1
-
-    def __add__(self, other):
-        if isinstance(other, (int, float)):
-            self.addend += other
-            return self
-        elif isinstance(other, Variable):
-            self.addend += other.addend
-            self.coeff *= other.coeff
-            return self
-        raise RuntimeError()
-
-    def __radd__(self, other):
-        if isinstance(other, (int, float)):
-            self.addend += other
-            return self
-        raise RuntimeError()
-
-    def __sub__(self, other):
-        if isinstance(other, (int, float)):
-            self.addend -= other
-            return self
-        raise RuntimeError()
-
-    def __rsub__(self, other):
-        if isinstance(other, (int, float)):
-            self.addend -= other
-            return self
-        raise RuntimeError()
-
-    def __mul__(self, other):
-        if isinstance(other, (int, float)):
-            if other == 0:
-                return self.addend
-            self.coeff *= other
-            return self
-        raise RuntimeError()
-
-    def __rmul__(self, other):
-        if isinstance(other, (int, float)):
-            if other == 0:
-                return self.addend
-            self.coeff *= other
-            return self
-        raise RuntimeError()
-
-    def __repr__(self):
-        return "%s * %s + %s" % (self.coeff, self.name, self.addend)
-
-def get_rad(value, always_p=False):
-    """返回一个弧度字符串（a*pi/b）
-
-    @param value 某浮点数
-    @param always_p 返回的弧度是否为正，若为True则返回5pi/3而非-pi/3
-    """
-    if value == 0: return "0"
-    frac = Fraction(value / math.pi).limit_denominator(1000)
-    a, b = frac.as_integer_ratio()
-    if math.isclose(value, frac * math.pi):
-        if b == 1:
-            return "%s%s" % (a if abs(a) != 1 else str(a).replace("1", ""), pi_s)
-        if always_p:
-            return "%s%s/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), pi_s, b)
-        else:
-            if math.isclose((a + 1) / b, 2):
-                return "-%s/%s" % (pi_s, b)
-            else:
-                return "%s%s/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), pi_s, b)
-    else:
-        if math.isclose(value, frac):
-            return "%s%s%s" % (a, "/" if b == 1 else "", b)
-        else:
-            return str(value)
-
 def get_trig(name, value):
     """返回一个三角比的值对应的弧度（一般情况下是两个）
 
-    @param name 三角比的名称（"s", "c", "t"）
+    @param name  三角比的名称（"s", "c", "t"）
     @param value 三角比的值
     """
     if name[0] == "s": f = math.sin
@@ -211,29 +82,64 @@ def get_trig(name, value):
         # 对精度不足的修复：math.isclose(math.sin(math.pi), 0) => False
         # 但是由于精度不够（接近于0的数加上1就更接近于1了）：math.isclose(math.sin(math.pi) + 1, 1) => True
         if math.isclose(value, f(i)) or math.isclose(value + 1, f(i) + 1):
-            result.append([get_rad(i), i])
+            result.append([get_num_string(i), i])
     return result
 
 def trig_eval(s, left=False):
-    # 解析器就不写了，直接用就可以了
+    """解析输入的表达式
+
+    @param s    某表达式
+    @param left 是否为等号左边的表达式
+    """
     if left:
-        # 这里解析等号左边，即包含三角函数的部分
+        if s == "s": return Sine(Variable())
+        elif s == "c": return Cosine(Variable())
+        elif s == "t": return Tangent(Variable())
         s = s.replace("x", "x()")
-        return eval(s, {"cos": lambda x: Function("cos", x), "sin": lambda x: Function("sin", x),
-                        "sqrt": math.sqrt, "pi": math.pi, "tan": lambda x: Function("tan", x),
-                        "x": lambda: Variable(), "__builtins__": {}})
+        return eval(s, {"cos": lambda x: Cosine(x), "sin": lambda x: Sine(x),
+            "sqrt": math.sqrt, "pi": math.pi, "tan": lambda x: Tangent(x),
+            "x": lambda: Variable(), "__builtins__": {}})
     else:
         return eval(s, {"sqrt": math.sqrt, "pi": math.pi, "__builtins__": {}})
+
+def build_sol(expr, left):
+    x_coeff = left.args[0].coeff
+    result = []
+    for item, action in expr.items():
+        if action == False:
+            result.append(item)
+        else:
+            if isinstance(item, (int, float)):
+                result.append(get_num_string(item / x_coeff))
+            else:
+                if "*" in item:
+                    coeff, item = item.split("*")
+                else:
+                    coeff = 1
+                a, b = Fraction(float(coeff) / x_coeff).limit_denominator(1000).as_integer_ratio()
+                result.append("%s%s%s%s" % (a if abs(a) != 1 else str(a).replace("1", ""), item,
+                    "/" if b != 1 else "", "" if b == 1 else b))
+    return " ".join(result)
+
+def is_simplest(expr):
+    if not isinstance(expr, Function):
+        raise RuntimeError()
+    elif isinstance(expr.args[0], Variable):
+        return True
+    return False
 
 def equ(expr, val):
     """求解三角方程
 
     @param expr 等号左边的表达式
-    @param s 值
+    @param val  值
     """
     global D
     try:
         left = trig_eval(expr, True)
+        if not is_simplest(left):
+            print("ERROR: Only support simplest trigonometric equation!")
+            return
     except:
         print("Error: Invalid left expr!")
         return
@@ -241,7 +147,8 @@ def equ(expr, val):
     elif left.name == "cos": f = math.acos
     elif left.name == "tan": f = math.atan
     try:
-        sol = f(float(trig_eval(val)))
+        val = float(trig_eval(val))
+        sol = f(val)
     except ValueError:
         print("Error: Invalid right value!")
         return
@@ -249,42 +156,52 @@ def equ(expr, val):
     for tn, kv in special.items():
         if left.name == tn:
             for k, v in kv.items():
-                if math.isclose(k, float(trig_eval(val))):
+                if math.isclose(k, val):
                     print("x = %s" % v)
                     return
-    if (v := get_rad(sol)).find(pi_s) != -1:
+    if get_num_string(sol).find(pi_s) != -1:
         # 可使用弧度表示的解集
+        coeff = left.args[0].coeff
         if left.name == "sin":
-            formula = ["k * math.pi + (-1) ** k * %s" % sol]
-            if sol > 0:
-                print("x = k%s + (-1)^k * %s" % (pi_s, v))
-            elif sol < 0:
-                print("x = k%s - (-1)^k * %s" % (pi_s, get_rad(-sol)))
+            formula = ["(k * math.pi + (-1) ** k * %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else "")]
+            print("x = " + build_sol({
+                "k%s" % pi_s: True,
+                "+" if sol > 0 else "-": False,
+                "(-1)**k": False,
+                "*": False,
+                abs(sol): True
+            }, left))
         elif left.name == "cos":
-            formula = ["k * math.tau + %s" % sol, "k * math.tau + %s" % sol]
-            print("x = 2k%s %s %s" % (pi_s, chr(177), v))
+            formula = ["(k * math.tau + %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else ""),
+                    "(k * math.tau - %s) %s" % (sol, ("/ (%s)" % coeff) if left.coeff != 1 else "")]
+            print("x = " + build_sol({
+                "2*k%s" % pi_s: True,
+                chr(177): False,
+                sol: True,
+            }, left))
         elif left.name == "tan":
-            formula = ["k * math.pi + %s" % sol]
-            if sol > 0:
-                print("x = k%s + %s" % (pi_s, v))
-            elif sol < 0:
-                print("x = k%s - %s" % (pi_s, get_rad(-sol)))
+            formula = ["(k * math.pi + %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else "")]
+            print("x = " + build_sol({
+                "k%s" % pi_s: True,
+                "+" if sol > 0 else "-": False,
+                abs(sol): True,
+            }, left))
         # 如若设置了定义域，那么就在定义域内找解
         if D is not None:
             first, last, result = 0, 0, []
             for expr in formula:
                 if (D[0] <= (x := eval(expr.replace("k", "(0)"))) <= D[1]):
-                    result.append(get_rad(x))
+                    result.append(get_num_string(x))
                     first, last = x, x
                 i, flag = 1, 1
                 while True:
                     if (D[0] <= (x := eval(expr.replace("k", "(%s)" % i))) <= D[1]):
-                        if get_rad(x) not in result:
+                        if get_num_string(x) not in result:
                             if x > last:
-                                result.append(get_rad(x))
+                                result.append(get_num_string(x))
                                 last = x
                             elif x < first:
-                                result.insert(0, get_rad(x))
+                                result.insert(0, get_num_string(x))
                                 first = x
                         i += flag * 1
                     else:
@@ -295,21 +212,38 @@ def equ(expr, val):
     else:
         # 如上述方法不可行，则使用反三角表示，反三角不支持寻找定义域内的解
         if left.name == "sin":
-            print("x = k%s + (-1)^k * arcsin(%s)" % (pi_s, val))
+            print("x = " + build_sol({
+                "k%s" % pi_s: True,
+                "+" if sol > 0 else "-": False,
+                "(-1)**k": False,
+                "*": False,
+                "arcsin(%s)" % get_num_string(abs(val)): True
+            }, left))
         elif left.name == "cos":
-            print("x = 2k%s %s arccos(%s)" % (pi_s, chr(177), val))
+            print("x = " + build_sol({
+                "2*k%s" % pi_s: True,
+                chr(177): False,
+                "arccos(%s)" % get_num_string(val): True
+            }, left))
         elif left.name == "tan":
-            print("x = k%s + arctan(%s)" % (pi_s, val))
+            print("x = " + build_sol({
+                "k%s" % pi_s: True,
+                "+" if sol > 0 else "-": False,
+                "arctan(%s)" % get_num_string(abs(val)): True
+            }, left))
 
 def inequ(expr, val, op):
     """求解三角不等式
 
     @param expr 一个式子
-    @param val 值
-    @param op 不等号
+    @param val  值
+    @param op   不等号
     """
     try:
         left = trig_eval(expr, True)
+        if not is_simplest(left):
+            print("ERROR: Only support simplest trigonometric inequation!")
+            return
     except:
         print("Error: Invalid left expr!")
         return
@@ -317,7 +251,7 @@ def inequ(expr, val, op):
         value = float(trig_eval(val))
     except ValueError:
         print("Error: Invalid right value!")
-        return
+        return 
     # 根据不等号设置区间开闭
     get_open = lambda: "(" if "=" not in op else "["
     get_close = lambda: ")" if "=" not in op else "]"
@@ -336,10 +270,10 @@ def inequ(expr, val, op):
             x1, x2 = x2, x1
             if value > 0:
                 # 此时解集穿过x轴正半轴，需表示成(2*k*pi-a, 2*k*pi+b)
-                x1 = [get_rad(-math.tau + x1[1], True), -math.tau + x1[1]]
+                x1 = [get_num_string(-math.tau + x1[1], True), -math.tau + x1[1]]
             elif value < 0:
                 # 此时终小于始，需调整
-                x2 = [get_rad(x2[1] + math.tau, True), x2[1] + math.tau]
+                x2 = [get_num_string(x2[1] + math.tau, True), x2[1] + math.tau]
         if value == 0:
             print("%s2k%s-%s, 2k%s%s" % ((get_open(), ) + (pi_s, ) * 3) + (get_close(), ))
         else:
@@ -355,11 +289,11 @@ def inequ(expr, val, op):
         if ("<" in op) and (value > 0):
             # 此时解集为第一象限始边到第四象限终边，但由于上述单位圆特性，需对调始终边
             x1, x2 = x2, x1
-            x2 = [get_rad(x2[1] + math.tau, True), x2[1] + math.tau]
+            x2 = [get_num_string(x2[1] + math.tau, True), x2[1] + math.tau]
         elif (">" in op) and (value < 0):
             # 此时解集穿过x轴正半轴
             x1, x2 = x2, x1
-            x1 = [get_rad(-math.tau + x1[1], True), -math.tau + x1[1]]
+            x1 = [get_num_string(-math.tau + x1[1], True), -math.tau + x1[1]]
         if ("<" in op) and (value == 0):
             print("%s2k%s+%s/2, 2k%s+3%s/2%s" % ((get_open(), ) + (pi_s, ) * 4) + (get_close(), ))
         else:
@@ -368,9 +302,9 @@ def inequ(expr, val, op):
         # tan最简单，看函数图像即可出结果
         sol = math.atan(value)
         if ">" in op:
-            print("%sk%s%s%s, k%s+%s/2)" % (get_open(), pi_s, "+" if sol >= 0 else "", get_rad(sol), pi_s, pi_s))
+            print("%sk%s%s%s, k%s+%s/2)" % (get_open(), pi_s, "+" if sol >= 0 else "", get_num_string(sol), pi_s, pi_s))
         elif "<" in op:
-            print("(k%s+%s/2, k%s%s%s%s" % (pi_s, pi_s, pi_s, "+" if sol >= 0 else "", get_rad(sol), get_close()))
+            print("(k%s+%s/2, k%s%s%s%s" % (pi_s, pi_s, pi_s, "+" if sol >= 0 else "", get_num_string(sol), get_close()))
 
 def set_var(name, *args):
     global D
