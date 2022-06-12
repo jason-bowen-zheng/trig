@@ -20,44 +20,46 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""一个没有任何用处的小型CAS系统"""
+"""一个没有任何用处的小型CAS系统
+
+这个CAS系统没有任何作用，它仅仅用于将用户在eval()中输入的字符串解析成适合计算机理解的数据。
+"""
 
 from fractions import Fraction
-import math
+from mpmath import fp
 
 def get_num_string(value, always_p=False):
     """返回一些有理数/无理数的分式表示
 
-    1. 弧度（a*pi/b）
-    2. 分数（小数位数小于四位）
-    3. sqrt(a)/b型的数（平方后小数位数小于四位）
+    1. 弧度
+    2. 分数
+    3. sqrt(a)/b型的数
 
     @param value    某浮点数
-    @param always_p 返回的弧度是否为正，若为True则返回5pi/3而非-pi/3
+    @param always_p 返回的弧度是否为正（在弧度值本身为正的情况下），若为True则返回5pi/3而非-pi/3
     """
-    if value == 0: return "0"
-    frac = Fraction(value / math.pi).limit_denominator(1000)
+    if fp.almosteq(value, 0): return "0"
+    frac = Fraction(value / fp.pi).limit_denominator(1000)
     a, b = frac.as_integer_ratio()
-    if math.isclose(value, frac * math.pi):
+    if fp.almosteq(value, frac * fp.pi):
         if b == 1:
             return "%s%s" % (a if abs(a) != 1 else str(a).replace("1", ""), chr(960))
         if always_p:
             return "%s%s/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), chr(960), b)
         else:
-            if math.isclose((a + 1) / b, 2):
+            if fp.almosteq((a + 1) / b, 2):
                 return "-%s/%s" % (chr(960), b)
             else:
                 return "%s%s/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), chr(960), b)
     else:
         a, b = Fraction(value).limit_denominator(1000).as_integer_ratio()
-        if math.isclose(value, a / b):
+        if fp.almosteq(value, a / b):
             return "%s%s%s" % (a, "/" if b != 1 else "", "" if b == 1 else b)
         else:
             flag = "" if value > 0 else "-"
             a, b = Fraction(value ** 2).limit_denominator(1000).as_integer_ratio()
-            print(a, b)
-            if math.isclose(value ** 2, a / b):
-                return "%ssqrt(%s)%s%s" % (flag, a, "/" if b != 1 else "", "" if b == 1 else math.isqrt(b))
+            if fp.almosteq(value ** 2, a / b):
+                return "%ssqrt(%s)%s%s" % (flag, a, "/" if b != 1 else "", "" if b == 1 else int(fp.sqrt(b)))
             else:
                 return str(value)
 
@@ -72,7 +74,10 @@ class Add(object):
                 prefix += item
             else:
                 result.append(item)
-        self.args = result + [prefix]
+        if prefix != 0:
+            self.args = result + [prefix]
+        else:
+            self.args = result
 
     def __add__(self, other):
         if isinstance(other, (int, float)) and isinstance(self.args[-1], (int, float)):
@@ -101,6 +106,15 @@ class Add(object):
             raise TypeError()
         return self
 
+    def __truediv__(self, other):
+        if isinstance(other, (int, float)):
+            result = []
+            for item in self.args:
+                result.append(item / other)
+            self.args = result
+            return self
+        raise TypeError()
+
     def __repr__(self):
         first, result = True, []
         for item in self.args:
@@ -110,7 +124,7 @@ class Add(object):
                 else:
                     result.append(get_num_string(item))
             else:
-                result.append(repr(item))
+                result.append(("+" if not first else "") + repr(item))
             first = False
         return "".join(result)
 
@@ -159,6 +173,17 @@ class Mul(object):
             raise TypeError()
         return self
 
+    def __truediv__(self, other):
+        if isinstance(other, (int, float)):
+            if isinstance(self.args[0], (int, float)):
+                self.args[0] /= other
+            else:
+                self.args.insert(0, 1 / other)
+            if fp.almosteq(self.args[0], 1):
+                self.args = self.args[1:]
+            return self
+        raise TypeError()
+
     def __repr__(self):
         result = []
         for item in self.args:
@@ -175,12 +200,13 @@ class Mul(object):
         return "*".join(result)
 
 
-class Function(object):
-    """一个函数"""
+class MathItem(object):
 
-    def __init__(self, *args):
-        self.name = "func"
-        self.args = args
+    def __init__(self):
+        self.name = ""
+
+    def __eq__(self, other):
+        return self.name == other.name
 
     def __add__(self, other):
         return Add(self, other)
@@ -200,6 +226,17 @@ class Function(object):
     def __rmul__(self, other):
         return Mul(other, self)
 
+    def __truediv__(self, other):
+        return Mul(self, 1 / other)
+
+class Function(MathItem):
+    """一个函数"""
+
+    def __init__(self, *args):
+        super().__init__()
+        self.name = "func"
+        self.args = args
+ 
     def __repr__(self):
         args = []
         for item in self.args:
@@ -211,51 +248,43 @@ class Function(object):
         return "%s(%s)" % (self.name, args)
 
 
-class Variable(object):
+class Variable(MathItem):
     """一个变量"""
 
-    def __init__(self):
-        self.name = "x"
-
-    def __add__(self, other):
-        return Add(self, other)
-
-    def __radd__(self, other):
-        return Add(other, self)
-
-    def __sub__(self, other):
-        return Add(self, -other)
-
-    def __rsub__(self, other):
-        return Add(other, -self)
-
-    def __mul__(self, other):
-        return Mul(self, other)
-
-    def __rmul__(self, other):
-        return Mul(other, self) 
+    def __init__(self, name="x"):
+        super().__init__()
+        self.name = name
 
     def __repr__(self):
         return "%s" % self.name
 
 
-class Sine(Function):
+class Const(Variable):
+
+    def __init__(self, name, value):
+        super().__init__()
+        self.name = name
+        self.value = value
+
+class sin(Function):
 
     def __init__(self, x):
         super().__init__(x)
         self.name = "sin"
 
 
-class Cosine(Function):
+class cos(Function):
 
     def __init__(self, x):
         super().__init__(x)
         self.name = "cos"
 
 
-class Tangent(Function):
+class tan(Function):
 
     def __init__(self, x):
         super().__init__(x)
         self.name = "tan"
 
+pi = Const(chr(960), fp.pi)
+e = Const("e", fp.e)

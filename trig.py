@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # MIT License
 #
 # Copyright (c) 2022 jason-bowen-zheng
@@ -20,9 +21,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .cas import *
-from fractions import Fraction
-import math
+from cas import *
+from mpmath import fp
 if __import__("sys").platform != "win32":
     import readline
 
@@ -33,13 +33,13 @@ pi_s = chr(960)
 # 特殊的三角方程的解集
 special = {
     "sin": {
-        -1: {"2*k%s" % pi_s: True, "-": False,math.pi / 2: True},
+        -1: {"2*k%s" % pi_s: True, "-": False,fp.pi / 2: True},
         0: {"k" + pi_s: True},
-        1: {"2*k%s" % pi_s: True, "+": False, math.pi / 2: True}
+        1: {"2*k%s" % pi_s: True, "+": False, fp.pi / 2: True}
     },
     "cos": {
-        -1: {"2*k%s" % pi_s: True, "+": False, math.pi: True},
-        0: {"k%s" % pi_s: True, "+": False, math.pi / 2: True},
+        -1: {"2*k%s" % pi_s: True, "+": False, fp.pi: True},
+        0: {"k%s" % pi_s: True, "+": False, fp.pi / 2: True},
         1: {"2*k" + pi_s: True}
     },
     "tan": {
@@ -49,22 +49,22 @@ special = {
 # 单位圆的弧度圈，逆时针方向，从-pi/2开始
 # 为什么是-pi/2而非0呢？很简单，cos(x)>a需要纵截单位圆，这样便于程序设计，且也便于sin(x)>a的运算（横截的话左右对称）
 unit_circle = [
-        -math.pi / 2,
-        -math.pi / 3,
-        -math.pi / 4,
-        -math.pi / 6,
+        -fp.pi / 2,
+        -fp.pi / 3,
+        -fp.pi / 4,
+        -fp.pi / 6,
         0,
-        math.pi / 6,
-        math.pi / 4,
-        math.pi / 3,
-        math.pi / 2,
-        2 * math.pi / 3,
-        3 * math.pi / 4,
-        5 * math.pi / 6,
-        math.pi,
-        7 * math.pi / 6,
-        5 * math.pi / 4,
-        4 * math.pi / 3
+        fp.pi / 6,
+        fp.pi / 4,
+        fp.pi / 3,
+        fp.pi / 2,
+        2 * fp.pi / 3,
+        3 * fp.pi / 4,
+        5 * fp.pi / 6,
+        fp.pi,
+        7 * fp.pi / 6,
+        5 * fp.pi / 4,
+        4 * fp.pi / 3
 ]
 
 def get_trig(name, value):
@@ -73,14 +73,12 @@ def get_trig(name, value):
     @param name  三角比的名称（"s", "c", "t"）
     @param value 三角比的值
     """
-    if name[0] == "s": f = math.sin
-    if name[0] == "c": f = math.cos
-    if name[0] == "t": f = math.tan
+    if name[0] == "s": f = fp.sin
+    if name[0] == "c": f = fp.cos
+    if name[0] == "t": f = fp.tan
     result = []
     for i in unit_circle:
-        # 对精度不足的修复：math.isclose(math.sin(math.pi), 0) => False
-        # 但是由于精度不够（接近于0的数加上1就更接近于1了）：math.isclose(math.sin(math.pi) + 1, 1) => True
-        if math.isclose(value, f(i)) or math.isclose(value + 1, f(i) + 1):
+        if fp.almosteq(value, f(i)):
             result.append([get_num_string(i), i])
     return result
 
@@ -91,15 +89,15 @@ def trig_eval(s, left=False):
     @param left 是否为等号左边的表达式
     """
     if left:
-        if s == "s": return Sine(Variable())
-        elif s == "c": return Cosine(Variable())
-        elif s == "t": return Tangent(Variable())
+        if s == "s": return sin(Variable())
+        elif s == "c": return cos(Variable())
+        elif s == "t": return tan(Variable())
         s = s.replace("x", "x()")
-        return eval(s, {"cos": lambda x: Cosine(x), "sin": lambda x: Sine(x),
-            "sqrt": math.sqrt, "pi": math.pi, "tan": lambda x: Tangent(x),
-            "x": lambda: Variable(), "__builtins__": {}})
+        return eval(s, {"cos": lambda x: cos(x), "sin": lambda x: sin(x),
+            "sqrt": fp.sqrt, "pi": fp.pi, "tan": lambda x: tan(x),
+            "x": lambda: Variable("x"), "__builtins__": {}})
     else:
-        return eval(s, {"sqrt": math.sqrt, "pi": math.pi, "__builtins__": {}})
+        return eval(s, {"sqrt": fp.sqrt, "pi": fp.pi, "__builtins__": {}})
 
 def build_sol(expr, left):
     """根据左值和最简方程的解构建最终解
@@ -113,7 +111,7 @@ def build_sol(expr, left):
         if action == False:
             result.append(item)
         else:
-            if isinstance(item, (int, float)):
+            if isinstance(item, (int, float, fp.mpf)):
                 result.append(get_num_string(item / x_coeff))
             else:
                 if "*" in item:
@@ -151,9 +149,9 @@ def equ(expr, val):
     except:
         print("Error: Invalid left expr!")
         return
-    if left.name == "sin": f = math.asin
-    elif left.name == "cos": f = math.acos
-    elif left.name == "tan": f = math.atan
+    if left.name == "sin": f = fp.asin
+    elif left.name == "cos": f = fp.acos
+    elif left.name == "tan": f = fp.atan
     try:
         val = float(trig_eval(val))
         sol = f(val)
@@ -164,14 +162,14 @@ def equ(expr, val):
     for tn, kv in special.items():
         if left.name == tn:
             for k, v in kv.items():
-                if math.isclose(k, val):
+                if fp.almosteq(k, val):
                     print("x = %s" % build_sol(v, left))
                     return
     if get_num_string(sol).find(pi_s) != -1:
         # 可使用弧度表示的解集
         coeff = left.args[0].args[0] if isinstance(left.args[0], Mul) else 1
         if left.name == "sin":
-            formula = ["(k * math.pi + (-1) ** k * %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else "")]
+            formula = ["(k * fp.pi + (-1) ** k * %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else "")]
             print("x = " + build_sol({
                 "k%s" % pi_s: True,
                 "+" if sol > 0 else "-": False,
@@ -180,15 +178,15 @@ def equ(expr, val):
                 abs(sol): True
             }, left))
         elif left.name == "cos":
-            formula = ["(k * math.tau + %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else ""),
-                    "(k * math.tau - %s) %s" % (sol, ("/ (%s)" % coeff) if left.coeff != 1 else "")]
+            formula = ["(2 * k * fp.pi + %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else ""),
+                    "(2 * k * math.pi - %s) %s" % (sol, ("/ (%s)" % coeff) if left.coeff != 1 else "")]
             print("x = " + build_sol({
                 "2*k%s" % pi_s: True,
                 chr(177): False,
                 sol: True,
             }, left))
         elif left.name == "tan":
-            formula = ["(k * math.pi + %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else "")]
+            formula = ["(k * fp.pi + %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else "")]
             print("x = " + build_sol({
                 "k%s" % pi_s: True,
                 "+" if sol > 0 else "-": False,
@@ -267,23 +265,27 @@ def inequ(expr, val, op):
     if left.name == "sin":
         if abs(value) == 1:
             # 对于极值的处理
-            if (op == ">=") and (value == 1): print("x = 2k%s + %s" % (pi_s, pi_s))
+            if (op == ">=") and (value == 1): print("x = 2k%s + %s/2" % (pi_s, pi_s))
             elif (op == ">=") and (value == -1): print("x = R")
             elif (op == ">") and (value == 1): print("x = %s" % chr(8709))
             elif (op ==">") and (value == -1): print("x %s 2k%s + 3%s/2" % (chr(8800), pi_s, pi_s))
             return
-        x1, x2 = get_trig("s", value)
+        try:
+            x1, x2 = get_trig("s", value)
+        except:
+            print("Error: Could not find solution!")
+            return
         if ("<" in op):
             # 解集是逆时针找出的，需对调始终边
             x1, x2 = x2, x1
             if value > 0:
                 # 此时解集穿过x轴正半轴，需表示成(2*k*pi-a, 2*k*pi+b)
-                x1 = [get_num_string(-math.tau + x1[1], True), -math.tau + x1[1]]
+                x1 = [get_num_string(-2 * math.pi + x1[1], True), -2 * fp.pi + x1[1]]
             elif value < 0:
                 # 此时终小于始，需调整
-                x2 = [get_num_string(x2[1] + math.tau, True), x2[1] + math.tau]
+                x2 = [get_num_string(x2[1] + 2 * fp.pi, True), x2[1] + 2 * fp.pi]
         if value == 0:
-            print("%s2k%s-%s, 2k%s%s" % ((get_open(), ) + (pi_s, ) * 3) + (get_close(), ))
+            print("%s2k%s-%s, 2k%s%s" % ((get_open(), ) + (pi_s, ) * 3 + (get_close(), )))
         else:
             print("%s2k%s%s%s, 2k%s%s%s%s" % (get_open(), pi_s, "+" if x1[1] > 0 else "", x1[0] if x1[1] != 0 else "", pi_s, "+" if x2[1] > 0 else "", x2[0], get_close()))
     elif left.name == "cos":
@@ -293,22 +295,26 @@ def inequ(expr, val, op):
             elif (op == ">") and (value == 1): print("x = %s" % chr(8709))
             elif (op ==">") and (value == -1): print("x %s 2k%s + %s" % (chr(8800), pi_s, pi_s))
             return
-        x1, x2 = get_trig("c", value)
+        try:
+            x1, x2 = get_trig("c", value)
+        except:
+            print("Error: Could not find solution!")
+            return
         if ("<" in op) and (value > 0):
             # 此时解集为第一象限始边到第四象限终边，但由于上述单位圆特性，需对调始终边
             x1, x2 = x2, x1
-            x2 = [get_num_string(x2[1] + math.tau, True), x2[1] + math.tau]
+            x2 = [get_num_string(x2[1] + 2 * fp.pi, True), x2[1] + 2 * fp.pi]
         elif (">" in op) and (value < 0):
             # 此时解集穿过x轴正半轴
             x1, x2 = x2, x1
-            x1 = [get_num_string(-math.tau + x1[1], True), -math.tau + x1[1]]
+            x1 = [get_num_string(-2 * fp.pi + x1[1], True), -2 * fp.pi + x1[1]]
         if ("<" in op) and (value == 0):
-            print("%s2k%s+%s/2, 2k%s+3%s/2%s" % ((get_open(), ) + (pi_s, ) * 4) + (get_close(), ))
+            print("%s2k%s+%s/2, 2k%s+3%s/2%s" % ((get_open(), ) + (pi_s, ) * 4 + (get_close(), )))
         else:
             print("%s2k%s%s%s, 2k%s%s%s%s" % (get_open(), pi_s, "+" if x1[1] >= 0 else "", x1[0], pi_s, "+" if x2[1] > 0 else "", x2[0], get_close()))
     elif left.name == "tan":
         # tan最简单，看函数图像即可出结果
-        sol = math.atan(value)
+        sol = fp.atan(value)
         if ">" in op:
             print("%sk%s%s%s, k%s+%s/2)" % (get_open(), pi_s, "+" if sol >= 0 else "", get_num_string(sol), pi_s, pi_s))
         elif "<" in op:
