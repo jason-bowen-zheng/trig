@@ -25,6 +25,7 @@
 这个CAS系统没有任何作用，它仅仅用于将用户在eval()中输入的字符串解析成适合计算机理解的数据。
 """
 
+from numbers import Number
 from fractions import Fraction
 from mpmath import fp
 
@@ -70,7 +71,7 @@ class Add(object):
     def __init__(self, *args):
         prefix, result = 0, []
         for item in args:
-            if isinstance(item, (int, float)):
+            if isinstance(item, Number):
                 prefix += item
             else:
                 result.append(item)
@@ -80,34 +81,34 @@ class Add(object):
             self.args = result
 
     def __add__(self, other):
-        if isinstance(other, (int, float)) and isinstance(self.args[-1], (int, float)):
+        if isinstance(other, Number) and isinstance(self.args[-1], Number):
             self.args[-1] += other
-        elif isinstance(other, (int, float, Function, Variable)):
+        elif isinstance(other, (Number, MathItem)):
             self.args.append(other)
         else:
             raise TypeError()
         return self
 
     def __radd__(self, other):
-        if isinstance(other, (int, float)) and isinstance(self.args[-1], (int, float)):
+        if isinstance(other, Number) and isinstance(self.args[-1], Number):
             self.args[-1] += other
-        elif isinstance(other, (int, float, Function, Variable)):
+        elif isinstance(other, (Number, MathItem)):
             self.args.insert(0, other)
         else:
             raise TypeError()
         return self
 
     def __sub__(self, other):
-        if isinstance(other, (int, float)) and isinstance(self.args[-1], (int, float)):
+        if isinstance(other, Number) and isinstance(self.args[-1], Number):
             self.args[-1] -= other
-        if isinstance(other, (int, float, Function, Variable)):
+        if isinstance(other, (Number, MathItem)):
             self.args.append(-other)
         else:
             raise TypeError()
         return self
 
     def __truediv__(self, other):
-        if isinstance(other, (int, float)):
+        if isinstance(other, Number):
             result = []
             for item in self.args:
                 result.append(item / other)
@@ -118,7 +119,7 @@ class Add(object):
     def __repr__(self):
         first, result = True, []
         for item in self.args:
-            if isinstance(item, (int, float)):
+            if isinstance(item, Number):
                 if item >= 0:
                     result.append(("+" if not first else "") + get_num_string(item, True))
                 else:
@@ -136,7 +137,7 @@ class Mul(object):
         self.args = list(args)
         prefix, result = 1, []
         for item in args:
-            if isinstance(item, (int, float)):
+            if isinstance(item, Number):
                 prefix *= item
             else:
                 result.append(item)
@@ -152,30 +153,30 @@ class Mul(object):
         return Add(self, -other)
 
     def __mul__(self, other):
-        if isinstance(other, (int, float)) and isinstance(self.args[0], (int, float)):
+        if isinstance(other, Number) and isinstance(self.args[0], Number):
             self.args[0] *= other
-        elif isinstance(other, (int, float)):
+        elif isinstance(other, Number):
             self.args.insert(0, other)
-        elif isinstance(other, (Function, Variable)):
+        elif isinstance(other, (MathItem)):
             self.args.append(other)
         else:
             raise TypeError()
         return self
 
     def __rmul__(self, other):
-        if isinstance(other, (int, float)) and isinstance(self.args[0], (int, float)):
+        if isinstance(other, Number) and isinstance(self.args[0], Number):
             self.args[0] *= other
-        elif isinstance(other, (int, float)):
+        elif isinstance(other, Number):
             self.args.insert(0, other)
-        elif isinstance(other, (Function, Variable)):
+        elif isinstance(other, MathItem):
             self.args.append(other)
         else:
             raise TypeError()
         return self
 
     def __truediv__(self, other):
-        if isinstance(other, (int, float)):
-            if isinstance(self.args[0], (int, float)):
+        if isinstance(other, Number):
+            if isinstance(self.args[0], Number):
                 self.args[0] /= other
             else:
                 self.args.insert(0, 1 / other)
@@ -187,7 +188,7 @@ class Mul(object):
     def __repr__(self):
         result = []
         for item in self.args:
-            if isinstance(item, (int, float)):
+            if isinstance(item, Number):
                 if item > 0:
                     result.append(get_num_string(item, True))
                 else:
@@ -197,7 +198,7 @@ class Mul(object):
                     result.append("(%s)" % repr(item))
                 else:
                     result.append(repr(item))
-        return "*".join(result)
+        return "".join(result)
 
 
 class MathItem(object):
@@ -240,7 +241,7 @@ class Function(MathItem):
     def __repr__(self):
         args = []
         for item in self.args:
-            if isinstance(item, (int, float)):
+            if isinstance(item, Number):
                 args.append(get_num_string(item, True))
             else:
                 args.append(repr(item))

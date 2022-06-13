@@ -111,7 +111,7 @@ def build_sol(expr, left):
         if action == False:
             result.append(item)
         else:
-            if isinstance(item, (int, float, fp.mpf)):
+            if isinstance(item, (Number, fp.mpf)):
                 result.append(get_num_string(item / x_coeff))
             else:
                 if "*" in item:
@@ -263,13 +263,6 @@ def inequ(expr, val, op):
     get_close = lambda: ")" if "=" not in op else "]"
     # sin和cos较麻烦，除了最后的print就别想看懂了（尽管有很多注释，但是不借助单位圆绝对无法理解）
     if left.name == "sin":
-        if abs(value) == 1:
-            # 对于极值的处理
-            if (op == ">=") and (value == 1): print("x = 2k%s + %s/2" % (pi_s, pi_s))
-            elif (op == ">=") and (value == -1): print("x = R")
-            elif (op == ">") and (value == 1): print("x = %s" % chr(8709))
-            elif (op ==">") and (value == -1): print("x %s 2k%s + 3%s/2" % (chr(8800), pi_s, pi_s))
-            return
         try:
             x1, x2 = get_trig("s", value)
         except:
@@ -280,7 +273,7 @@ def inequ(expr, val, op):
             x1, x2 = x2, x1
             if value > 0:
                 # 此时解集穿过x轴正半轴，需表示成(2*k*pi-a, 2*k*pi+b)
-                x1 = [get_num_string(-2 * math.pi + x1[1], True), -2 * fp.pi + x1[1]]
+                x1 = [get_num_string(-2 * fp.pi + x1[1], True), -2 * fp.pi + x1[1]]
             elif value < 0:
                 # 此时终小于始，需调整
                 x2 = [get_num_string(x2[1] + 2 * fp.pi, True), x2[1] + 2 * fp.pi]
@@ -289,12 +282,6 @@ def inequ(expr, val, op):
         else:
             print("%s2k%s%s%s, 2k%s%s%s%s" % (get_open(), pi_s, "+" if x1[1] > 0 else "", x1[0] if x1[1] != 0 else "", pi_s, "+" if x2[1] > 0 else "", x2[0], get_close()))
     elif left.name == "cos":
-        if abs(value) == 1:
-            if (op == ">=") and (value == 1): print("x = 2k%s" % pi_s)
-            elif (op == ">=") and (value == -1): print("x = R")
-            elif (op == ">") and (value == 1): print("x = %s" % chr(8709))
-            elif (op ==">") and (value == -1): print("x %s 2k%s + %s" % (chr(8800), pi_s, pi_s))
-            return
         try:
             x1, x2 = get_trig("c", value)
         except:
