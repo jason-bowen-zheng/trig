@@ -21,8 +21,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from cas import *
-from mpmath import fp
+try:
+    from mpmath import fp
+except:
+    print("'mpmath' isn't installed, use `pip install mpmath` to install it!")
+    exit()
+from numbers import Number
+from fractions import Fraction
 if __import__("sys").platform != "win32":
     import readline
 
@@ -66,6 +71,266 @@ unit_circle = [
         5 * fp.pi / 4,
         4 * fp.pi / 3
 ]
+
+
+class Operator(object):
+    pass
+
+
+class Add(Operator):
+
+    def __init__(self, *args):
+        prefix, result = 0, []
+        for item in args:
+            if isinstance(item, Number):
+                prefix += item
+            else:
+                result.append(item)
+        if prefix != 0:
+            self.args = result + [prefix]
+        else:
+            self.args = result
+
+    def __add__(self, other):
+        if isinstance(other, Number) and isinstance(self.args[-1], Number):
+            self.args[-1] += other
+        elif isinstance(other, (Number, MathItem, Operator)):
+            if isinstance(other, Mul) and isinstance(self.args[-1], Mul) and (len(self.args[-1].args) == 2) and \
+                    isinstance(self.args[-1].args[0], Number) and (self.args[-1].args[-1] == pi):
+                if (len(other.args) == 2) and isinstance(other.args[0], Number) and (other.args[-1] == pi):
+                    self.args[-1] += other
+            else:
+                self.args.append(other)
+        else:
+            raise TypeError()
+        return self
+
+    def __radd__(self, other): return other + self
+
+    def __sub__(self, other):
+        if isinstance(other, Number) and isinstance(self.args[-1], Number):
+            self.args[-1] -= other
+        if isinstance(other, (Number, MathItem, Operator)): 
+            self.args.append(-other)
+        else:
+            raise TypeError()
+        return self
+
+    def __truediv__(self, other):
+        if isinstance(other, Number):
+            result = []
+            for item in self.args:
+                result.append(item / other)
+            self.args = result
+            return self
+        raise TypeError()
+
+    def __repr__(self):
+        first, result = True, []
+        for item in self.args:
+            if isinstance(item, Number):
+                if item >= 0:
+                    result.append(("+" if not first else "") + get_num_string(item, True))
+                else:
+                    result.append(get_num_string(item))
+            else:
+                result.append(("+" if not first else "") + repr(item))
+            first = False
+        return "".join(result)
+
+
+class Mul(Operator):
+
+    def __init__(self, *args):
+        self.args = list(args)
+        prefix, result = 1, []
+        for item in args:
+            if isinstance(item, Number):
+                prefix *= item
+            else:
+                result.append(item)
+        self.args = [prefix] + result
+
+    def __add__(self, other):
+        if isinstance(other, Mul) and (len(self.args) == 2) and isinstance(self.args[0], Number) and (self.args[-1] == pi):
+                if (len(other.args) == 2) and isinstance(other.args[0], Number) and (other.args[-1] == pi):
+                    return Mul(self.args[0] + other.args[0], pi)
+        return Add(self, other)
+
+    def __mul__(self, other):
+        if isinstance(other, Number) and isinstance(self.args[0], Number):
+            self.args[0] *= other
+        elif isinstance(other, Number):
+            self.args.insert(0, other)
+        elif isinstance(other, (MathItem, Operator)):
+            self.args.append(other)
+        else:
+            raise TypeError()
+        return self
+    
+    def __neg__(self):
+        if isinstance(self.args[0], Number):
+            self.args[0] *= -1
+        else:
+            self.args.insert(0, -1)
+        return self
+
+    def __radd__(self, other): return other + self
+    def __sub__(self, other): return self + (-other)
+    def __rmul__(self, other): return self * other
+    def __truediv__(self, other): return Div(self, other)
+
+    def __repr__(self):
+        result = []
+        for item in self.args:
+            if isinstance(item, Number):
+                result.append(get_num_string(item, True))
+            else:
+                if isinstance(item, (Add, Div)):
+                    result.append("(%s)" % repr(item))
+                else:
+                    result.append(repr(item))
+        return "".join(result)
+
+
+class Div(Operator):
+
+    def __init__(self, a, b):
+        assert isinstance(b, Number)
+        self.args = [a, b]
+
+    def __add__(self, other):
+        if isinstance(other, Div) and fp.almosteq(self.args[1], other.args[1]):
+            return Div(self.args[0] + other.args[0], self.args[1])
+
+    def __truediv__(self, other):
+        assert isinstance(other, Number)
+
+    def __repr__(self):
+        if ("/" in get_num_string(self.args[1])) and (pi_s not in get_num_string(self.args[1])):
+            a, b = map(int, get_num_string(self.args[1]).split("/"))
+            if isinstance(self.args[0], Mul) and (len(self.args[0].args) == 2) \
+                    and (isinstance(self.args[0].args[0], Number)):
+                a *= self.args[0].args[0]
+                return "%s%s/%s" % (a, self.args[0].args[1], b)
+            return "%s(%s)/%s" % (a, repr(self.args[0]), b)
+        else:
+            if isinstance(self.args[0], Operator) and (not isinstance(self.args[0], Mul)):
+                return "(%s)/%s" % (repr(self.args[0]), self.args[1])
+            return "%s/%s" % (repr(self.args[0]), self.args[1])
+
+
+class MathItem(object):
+
+    def __init__(self):
+        self.name = ""
+
+    def __eq__(self, other): return isinstance(other, self.__class__) and (self.name == other.name)
+    def __add__(self, other): return Add(self, other)
+    def __radd__(self, other): return Add(other, self)
+    def __sub__(self, other): return Add(self, -other)
+    def __rsub__(self, other): return Add(other, -self)
+    def __mul__(self, other): return Mul(self, other)
+    def __rmul__(self, other): return Mul(other, self)
+    def __truediv__(self, other): return Div(self, other)
+
+class Function(MathItem):
+
+    def __init__(self, *args):
+        super().__init__()
+        self.name = "func"
+        self.args = args
+ 
+    def __repr__(self):
+        args = []
+        for item in self.args:
+            if isinstance(item, Number):
+                args.append(get_num_string(item, True))
+            else:
+                args.append(repr(item))
+        args = ",".join(args)
+        return "%s(%s)" % (self.name, args)
+
+
+class Variable(MathItem):
+
+    def __init__(self, name="x"):
+        super().__init__()
+        self.name = name
+
+    def __repr__(self):
+        return "%s" % self.name
+
+
+class Const(Variable):
+
+    def __init__(self, name, value):
+        super().__init__()
+        self.name = name
+        self.value = value
+
+    def __float__(self):
+        return float(self.value)
+
+
+pi = Const(pi_s, fp.pi)
+
+
+class sin(Function):
+
+    def __init__(self, x):
+        super().__init__(x)
+        self.name = "sin"
+
+
+class cos(Function):
+
+    def __init__(self, x):
+        super().__init__(x)
+        self.name = "cos"
+
+
+class tan(Function):
+
+    def __init__(self, x):
+        super().__init__(x)
+        self.name = "tan"
+
+
+def get_num_string(value, always_p=False):
+    """返回一些有理数/无理数的分式表示
+
+    1. 弧度
+    2. 分数
+    3. sqrt(a)/b型的数
+
+    @param value    某浮点数
+    @param always_p 返回的弧度是否为正（在弧度值本身为正的情况下），若为True则返回5pi/3而非-pi/3
+    """
+    if fp.almosteq(value, 0): return "0"
+    frac = Fraction(value / fp.pi).limit_denominator(1000)
+    a, b = frac.as_integer_ratio()
+    if fp.almosteq(value, frac * fp.pi):
+        if b == 1:
+            return "%s%s" % (a if abs(a) != 1 else str(a).replace("1", ""), pi_s)
+        if always_p:
+            return "%s%s/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), pi_s, b)
+        else:
+            if fp.almosteq((a + 1) / b, 2):
+                return "-%s/%s" % (pi_s, b)
+            else:
+                return "%s%s/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), pi_s, b)
+    else:
+        a, b = Fraction(value).limit_denominator(1000).as_integer_ratio()
+        if fp.almosteq(value, a / b):
+            return "%s%s%s" % (a, "/" if b != 1 else "", "" if b == 1 else b)
+        else:
+            flag = "" if value > 0 else "-"
+            a, b = Fraction(value ** 2).limit_denominator(1000).as_integer_ratio()
+            if fp.almosteq(value ** 2, a / b):
+                return "%ssqrt(%s)%s%s" % (flag, a, "/" if b != 1 else "", "" if b == 1 else int(fp.sqrt(b)))
+            else:
+                return str(value)
 
 def get_trig(name, value):
     """返回一个三角比的值对应的弧度（一般情况下是两个）
