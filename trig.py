@@ -95,12 +95,12 @@ class Add(Operator):
         if isinstance(other, Number) and isinstance(self.args[-1], Number):
             self.args[-1] += other
         elif isinstance(other, (Number, MathItem, Operator)):
-            if isinstance(other, Mul) and isinstance(self.args[-1], Mul) and (len(self.args[-1].args) == 2) and \
-                    isinstance(self.args[-1].args[0], Number) and (self.args[-1].args[-1] == pi):
-                if (len(other.args) == 2) and isinstance(other.args[0], Number) and (other.args[-1] == pi):
-                    self.args[-1] += other
-            else:
-                self.args.append(other)
+            for i in range(len(self.args)):
+                if isinstance(self.args[i], Mul) and isinstance(other, Mul):
+                    if isinstance(self.args[i] + other, Mul):
+                        self.args[i] += other
+                        return self
+            self.args.append(other)
         else:
             raise TypeError()
         return self
@@ -149,16 +149,20 @@ class Mul(Operator):
                 prefix *= item
             else:
                 result.append(item)
-        self.args = [prefix] + result
+        if fp.almosteq(prefix, 1):
+            self.args = result
+        else:
+            self.args = [prefix] + result
 
     def __add__(self, other):
-        if isinstance(other, Mul) and (len(self.args) == 2) and isinstance(self.args[0], Number) and (self.args[-1] == pi):
-                if (len(other.args) == 2) and isinstance(other.args[0], Number) and (other.args[-1] == pi):
-                    return Mul(self.args[0] + other.args[0], pi)
+        if isinstance(other, Mul) and (len(self.args) == 2) and isinstance(self.args[0], Number):
+                if (len(other.args) == 2) and isinstance(other.args[0], Number) and (other.args[-1] == self.args[-1]):
+                    return Mul(self.args[0] + other.args[0], self.args[-1])
         return Add(self, other)
 
     def __mul__(self, other):
         if isinstance(other, Number) and isinstance(self.args[0], Number):
+            print("a")
             self.args[0] *= other
         elif isinstance(other, Number):
             self.args.insert(0, other)
@@ -174,11 +178,11 @@ class Mul(Operator):
         else:
             self.args.insert(0, -1)
         return self
-
+    
     def __radd__(self, other): return other + self
     def __sub__(self, other): return self + (-other)
     def __rmul__(self, other): return self * other
-    def __truediv__(self, other): return Div(self, other)
+    def __truediv__(self, other):return Div(self, other)
 
     def __repr__(self):
         result = []
@@ -205,15 +209,16 @@ class Div(Operator):
 
     def __truediv__(self, other):
         assert isinstance(other, Number)
+        self.args[1] *= other
+        return self
 
     def __repr__(self):
         if ("/" in get_num_string(self.args[1])) and (pi_s not in get_num_string(self.args[1])):
             a, b = map(int, get_num_string(self.args[1]).split("/"))
-            if isinstance(self.args[0], Mul) and (len(self.args[0].args) == 2) \
-                    and (isinstance(self.args[0].args[0], Number)):
+            if isinstance(self.args[0], Mul) and (isinstance(self.args[0].args[0], Number)):
                 a *= self.args[0].args[0]
-                return "%s%s/%s" % (a, self.args[0].args[1], b)
-            return "%s(%s)/%s" % (a, repr(self.args[0]), b)
+                return "%s%s/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), Mul(*self.args[0].args[1:]), b)
+            return "%s(%s)/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), repr(self.args[0]), b)
         else:
             if isinstance(self.args[0], Operator) and (not isinstance(self.args[0], Mul)):
                 return "(%s)/%s" % (repr(self.args[0]), self.args[1])
