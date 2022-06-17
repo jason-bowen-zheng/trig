@@ -31,47 +31,6 @@ from fractions import Fraction
 if __import__("sys").platform != "win32":
     import readline
 
-# 定义域，通过set_var函数修改
-D = None
-# 表示圆周率的字符
-pi_s = chr(960)
-# 特殊的三角方程的解集
-special = {
-    "sin": {
-        -1: {"2*k%s" % pi_s: True, "-": False,fp.pi / 2: True},
-        0: {"k" + pi_s: True},
-        1: {"2*k%s" % pi_s: True, "+": False, fp.pi / 2: True}
-    },
-    "cos": {
-        -1: {"2*k%s" % pi_s: True, "+": False, fp.pi: True},
-        0: {"k%s" % pi_s: True, "+": False, fp.pi / 2: True},
-        1: {"2*k" + pi_s: True}
-    },
-    "tan": {
-        0: {"k" + pi_s: True}
-    }
-}
-# 单位圆的弧度圈，逆时针方向，从-pi/2开始
-# 为什么是-pi/2而非0呢？很简单，cos(x)>a需要纵截单位圆，这样便于程序设计，且也便于sin(x)>a的运算（横截的话左右对称）
-unit_circle = [
-        -fp.pi / 2,
-        -fp.pi / 3,
-        -fp.pi / 4,
-        -fp.pi / 6,
-        0,
-        fp.pi / 6,
-        fp.pi / 4,
-        fp.pi / 3,
-        fp.pi / 2,
-        2 * fp.pi / 3,
-        3 * fp.pi / 4,
-        5 * fp.pi / 6,
-        fp.pi,
-        7 * fp.pi / 6,
-        5 * fp.pi / 4,
-        4 * fp.pi / 3
-]
-
 
 class Operator(object):
     pass
@@ -110,7 +69,7 @@ class Add(Operator):
     def __sub__(self, other):
         if isinstance(other, Number) and isinstance(self.args[-1], Number):
             self.args[-1] -= other
-        if isinstance(other, (Number, MathItem, Operator)): 
+        if isinstance(other, (Number, MathItem, Operator)):
             self.args.append(-other)
         else:
             raise TypeError()
@@ -130,11 +89,20 @@ class Add(Operator):
         for item in self.args:
             if isinstance(item, Number):
                 if item >= 0:
-                    result.append(("+" if not first else "") + get_num_string(item, True))
+                    result.append(("+" if not first else "") +
+                                  get_num_string(item, True))
                 else:
                     result.append(get_num_string(item))
             else:
-                result.append(("+" if not first else "") + repr(item))
+                if isinstance(item, Mul):
+                    if isinstance(item.args[0], Number):
+                        if item.args[0] > 0:
+                            result.append(
+                                ("+" if not first else "") + repr(item))
+                        else:
+                            result.append(repr(item))
+                else:
+                    result.append(("+" if not first else "") + repr(item))
             first = False
         return "".join(result)
 
@@ -153,16 +121,26 @@ class Mul(Operator):
             self.args = result
         else:
             self.args = [prefix] + result
+        prefix, result = 1, []
+        for item in self.args:
+            if isinstance(item, Mul) and isinstance(item.args[0], Number):
+                prefix *= 1 if item.args[0] > 0 else -1
+                result.append(Mul(abs(item.args[1]), item.args[1:]))
+            else:
+                result.append(item)
+        if fp.almosteq(prefix, 1):
+            self.args = result
+        else:
+            self.args = [prefix] + result
 
     def __add__(self, other):
         if isinstance(other, Mul) and (len(self.args) == 2) and isinstance(self.args[0], Number):
-                if (len(other.args) == 2) and isinstance(other.args[0], Number) and (other.args[-1] == self.args[-1]):
-                    return Mul(self.args[0] + other.args[0], self.args[-1])
+            if (len(other.args) == 2) and isinstance(other.args[0], Number) and (other.args[-1] == self.args[-1]):
+                return Mul(self.args[0] + other.args[0], self.args[-1])
         return Add(self, other)
 
     def __mul__(self, other):
         if isinstance(other, Number) and isinstance(self.args[0], Number):
-            print("a")
             self.args[0] *= other
         elif isinstance(other, Number):
             self.args.insert(0, other)
@@ -171,18 +149,22 @@ class Mul(Operator):
         else:
             raise TypeError()
         return self
-    
+
+    def __truediv__(self, other):
+        if isinstance(other, Number):
+            return Mul(self.args[0], Div(Mul(*self.args[1:]), other))
+        return Div(self, other)
+
     def __neg__(self):
         if isinstance(self.args[0], Number):
             self.args[0] *= -1
         else:
             self.args.insert(0, -1)
         return self
-    
+
     def __radd__(self, other): return other + self
     def __sub__(self, other): return self + (-other)
     def __rmul__(self, other): return self * other
-    def __truediv__(self, other):return Div(self, other)
 
     def __repr__(self):
         result = []
@@ -191,10 +173,10 @@ class Mul(Operator):
                 result.append(get_num_string(item, True))
             else:
                 if isinstance(item, (Add, Div)):
-                    result.append("(%s)" % repr(item))
+                    result.append("(%s)" % item)
                 else:
                     result.append(repr(item))
-        return "".join(result)
+        return "*".join(result)
 
 
 class Div(Operator):
@@ -218,11 +200,31 @@ class Div(Operator):
             if isinstance(self.args[0], Mul) and (isinstance(self.args[0].args[0], Number)):
                 a *= self.args[0].args[0]
                 return "%s%s/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), Mul(*self.args[0].args[1:]), b)
-            return "%s(%s)/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), repr(self.args[0]), b)
+            return "%s(%s)/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), self.args[0], b)
         else:
             if isinstance(self.args[0], Operator) and (not isinstance(self.args[0], Mul)):
-                return "(%s)/%s" % (repr(self.args[0]), self.args[1])
-            return "%s/%s" % (repr(self.args[0]), self.args[1])
+                return "(%s)/%s" % (self.args[0], self.args[1])
+            return "%s/%s" % (self.args[0], self.args[1])
+
+
+class Pow(Operator):
+
+    def __init__(self, a, b):
+        self.args = [a, b]
+
+    def __repr__(self):
+        a, b = self.args
+        if isinstance(a, Number) and (a < 0):
+            a = "(%s)" % int(a)
+        elif isinstance(a, Operator):
+            a = "(%s)" % a
+        else:
+            a = str(a)
+        if isinstance(b, Operator):
+            b = "(%s)" % b
+        else:
+            b = str(b)
+        return "%s**%s" % (a, b)
 
 
 class MathItem(object):
@@ -230,7 +232,9 @@ class MathItem(object):
     def __init__(self):
         self.name = ""
 
-    def __eq__(self, other): return isinstance(other, self.__class__) and (self.name == other.name)
+    def __eq__(self, other): return isinstance(
+        other, self.__class__) and (self.name == other.name)
+
     def __add__(self, other): return Add(self, other)
     def __radd__(self, other): return Add(other, self)
     def __sub__(self, other): return Add(self, -other)
@@ -238,6 +242,10 @@ class MathItem(object):
     def __mul__(self, other): return Mul(self, other)
     def __rmul__(self, other): return Mul(other, self)
     def __truediv__(self, other): return Div(self, other)
+    def __pow__(self, other): return Pow(self, other)
+    def __rpow__(self, other): return Pow(other, self)
+    def __neg__(self): return Mul(-1, self)
+
 
 class Function(MathItem):
 
@@ -245,7 +253,7 @@ class Function(MathItem):
         super().__init__()
         self.name = "func"
         self.args = args
- 
+
     def __repr__(self):
         args = []
         for item in self.args:
@@ -278,9 +286,6 @@ class Const(Variable):
         return float(self.value)
 
 
-pi = Const(pi_s, fp.pi)
-
-
 class sin(Function):
 
     def __init__(self, x):
@@ -302,6 +307,49 @@ class tan(Function):
         self.name = "tan"
 
 
+# 定义域，通过set_var函数修改
+D = None
+# 表示圆周率的字符
+pi_s = chr(960)
+pi = Const(pi_s, fp.pi)
+# 特殊的三角方程的解集
+special = {
+    "sin": {
+        -1: {"2*k%s" % pi_s: True, "-": False, fp.pi / 2: True},
+        0: {"k" + pi_s: True},
+        1: {"2*k%s" % pi_s: True, "+": False, fp.pi / 2: True}
+    },
+    "cos": {
+        -1: {"2*k%s" % pi_s: True, "+": False, fp.pi: True},
+        0: {"k%s" % pi_s: True, "+": False, fp.pi / 2: True},
+        1: {"2*k" + pi_s: True}
+    },
+    "tan": {
+        0: {"k" + pi_s: True}
+    }
+}
+# 单位圆的弧度圈，逆时针方向，从-pi/2开始
+# 为什么是-pi/2而非0呢？很简单，cos(x)>a需要纵截单位圆，这样便于程序设计，且也便于sin(x)>a的运算（横截的话左右对称）
+unit_circle = [
+    -fp.pi / 2,
+    -fp.pi / 3,
+    -fp.pi / 4,
+    -fp.pi / 6,
+    0,
+    fp.pi / 6,
+    fp.pi / 4,
+    fp.pi / 3,
+    fp.pi / 2,
+    2 * fp.pi / 3,
+    3 * fp.pi / 4,
+    5 * fp.pi / 6,
+    fp.pi,
+    7 * fp.pi / 6,
+    5 * fp.pi / 4,
+    4 * fp.pi / 3
+]
+
+
 def get_num_string(value, always_p=False):
     """返回一些有理数/无理数的分式表示
 
@@ -312,7 +360,8 @@ def get_num_string(value, always_p=False):
     @param value    某浮点数
     @param always_p 返回的弧度是否为正（在弧度值本身为正的情况下），若为True则返回5pi/3而非-pi/3
     """
-    if fp.almosteq(value, 0): return "0"
+    if fp.almosteq(value, 0):
+        return "0"
     frac = Fraction(value / fp.pi).limit_denominator(1000)
     a, b = frac.as_integer_ratio()
     if fp.almosteq(value, frac * fp.pi):
@@ -331,11 +380,13 @@ def get_num_string(value, always_p=False):
             return "%s%s%s" % (a, "/" if b != 1 else "", "" if b == 1 else b)
         else:
             flag = "" if value > 0 else "-"
-            a, b = Fraction(value ** 2).limit_denominator(1000).as_integer_ratio()
+            a, b = Fraction(
+                value ** 2).limit_denominator(1000).as_integer_ratio()
             if fp.almosteq(value ** 2, a / b):
                 return "%ssqrt(%s)%s%s" % (flag, a, "/" if b != 1 else "", "" if b == 1 else int(fp.sqrt(b)))
             else:
                 return str(value)
+
 
 def get_trig(name, value):
     """返回一个三角比的值对应的弧度（一般情况下是两个）
@@ -343,14 +394,18 @@ def get_trig(name, value):
     @param name  三角比的名称（"s", "c", "t"）
     @param value 三角比的值
     """
-    if name[0] == "s": f = fp.sin
-    if name[0] == "c": f = fp.cos
-    if name[0] == "t": f = fp.tan
+    if name[0] == "s":
+        f = fp.sin
+    if name[0] == "c":
+        f = fp.cos
+    if name[0] == "t":
+        f = fp.tan
     result = []
     for i in unit_circle:
         if fp.almosteq(value, f(i)):
             result.append([get_num_string(i), i])
     return result
+
 
 def trig_eval(s, left=False):
     """解析输入的表达式
@@ -359,15 +414,19 @@ def trig_eval(s, left=False):
     @param left 是否为等号左边的表达式
     """
     if left:
-        if s == "s": return sin(Variable())
-        elif s == "c": return cos(Variable())
-        elif s == "t": return tan(Variable())
+        if s == "s":
+            return sin(Variable())
+        elif s == "c":
+            return cos(Variable())
+        elif s == "t":
+            return tan(Variable())
         s = s.replace("x", "x()")
         return eval(s, {"cos": lambda x: cos(x), "sin": lambda x: sin(x),
-            "sqrt": fp.sqrt, "pi": fp.pi, "tan": lambda x: tan(x),
-            "x": lambda: Variable("x"), "__builtins__": {}})
+                        "sqrt": fp.sqrt, "pi": fp.pi, "tan": lambda x: tan(x),
+                        "x": lambda: Variable("x"), "__builtins__": {}})
     else:
         return eval(s, {"sqrt": fp.sqrt, "pi": fp.pi, "__builtins__": {}})
+
 
 def build_sol(expr, left):
     """根据左值和最简方程的解构建最终解
@@ -388,10 +447,12 @@ def build_sol(expr, left):
                     coeff, item = item.split("*")
                 else:
                     coeff = 1
-                a, b = Fraction(float(coeff) / x_coeff).limit_denominator(1000).as_integer_ratio()
+                a, b = Fraction(
+                    float(coeff) / x_coeff).limit_denominator(1000).as_integer_ratio()
                 result.append("%s%s%s%s" % (a if abs(a) != 1 else str(a).replace("1", ""), item,
-                    "/" if b != 1 else "", "" if b == 1 else b))
+                                            "/" if b != 1 else "", "" if b == 1 else b))
     return " ".join(result)
+
 
 def is_simplest(expr):
     if not isinstance(expr, Function):
@@ -403,6 +464,7 @@ def is_simplest(expr):
             if isinstance(expr.args[0].args[1], Variable):
                 return True
     return False
+
 
 def equ(expr, val):
     """求解三角方程
@@ -419,9 +481,12 @@ def equ(expr, val):
     except:
         print("Error: Invalid left expr!")
         return
-    if left.name == "sin": f = fp.asin
-    elif left.name == "cos": f = fp.acos
-    elif left.name == "tan": f = fp.atan
+    if left.name == "sin":
+        f = fp.asin
+    elif left.name == "cos":
+        f = fp.acos
+    elif left.name == "tan":
+        f = fp.atan
     try:
         val = float(trig_eval(val))
         sol = f(val)
@@ -439,7 +504,8 @@ def equ(expr, val):
         # 可使用弧度表示的解集
         coeff = left.args[0].args[0] if isinstance(left.args[0], Mul) else 1
         if left.name == "sin":
-            formula = ["(k * fp.pi + (-1) ** k * %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else "")]
+            formula = ["(k * fp.pi + (-1) ** k * %s) %s" %
+                       (sol, ("/ (%s)" % coeff) if coeff != 1 else "")]
             print("x = " + build_sol({
                 "k%s" % pi_s: True,
                 "+" if sol > 0 else "-": False,
@@ -449,14 +515,15 @@ def equ(expr, val):
             }, left))
         elif left.name == "cos":
             formula = ["(2 * k * fp.pi + %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else ""),
-                    "(2 * k * math.pi - %s) %s" % (sol, ("/ (%s)" % coeff) if left.coeff != 1 else "")]
+                       "(2 * k * math.pi - %s) %s" % (sol, ("/ (%s)" % coeff) if left.coeff != 1 else "")]
             print("x = " + build_sol({
                 "2*k%s" % pi_s: True,
                 chr(177): False,
                 sol: True,
             }, left))
         elif left.name == "tan":
-            formula = ["(k * fp.pi + %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else "")]
+            formula = ["(k * fp.pi + %s) %s" %
+                       (sol, ("/ (%s)" % coeff) if coeff != 1 else "")]
             print("x = " + build_sol({
                 "k%s" % pi_s: True,
                 "+" if sol > 0 else "-": False,
@@ -481,7 +548,8 @@ def equ(expr, val):
                                 first = x
                         i += flag * 1
                     else:
-                        if flag == -1: break
+                        if flag == -1:
+                            break
                         i, flag = 1, -1
             print("Solution in D: {%s}" % ", ".join(result))
             D = None
@@ -508,6 +576,7 @@ def equ(expr, val):
                 "arctan(%s)" % get_num_string(abs(val)): True
             }, left))
 
+
 def inequ(expr, val, op):
     """求解三角不等式
 
@@ -527,10 +596,10 @@ def inequ(expr, val, op):
         value = float(trig_eval(val))
     except ValueError:
         print("Error: Invalid right value!")
-        return 
+        return
     # 根据不等号设置区间开闭
-    get_open = lambda: "(" if "=" not in op else "["
-    get_close = lambda: ")" if "=" not in op else "]"
+    def get_open(): return "(" if "=" not in op else "["
+    def get_close(): return ")" if "=" not in op else "]"
     # sin和cos较麻烦，除了最后的print就别想看懂了（尽管有很多注释，但是不借助单位圆绝对无法理解）
     if left.name == "sin":
         try:
@@ -543,14 +612,18 @@ def inequ(expr, val, op):
             x1, x2 = x2, x1
             if value > 0:
                 # 此时解集穿过x轴正半轴，需表示成(2*k*pi-a, 2*k*pi+b)
-                x1 = [get_num_string(-2 * fp.pi + x1[1], True), -2 * fp.pi + x1[1]]
+                x1 = [get_num_string(-2 * fp.pi + x1[1],
+                                     True), -2 * fp.pi + x1[1]]
             elif value < 0:
                 # 此时终小于始，需调整
-                x2 = [get_num_string(x2[1] + 2 * fp.pi, True), x2[1] + 2 * fp.pi]
+                x2 = [get_num_string(x2[1] + 2 * fp.pi, True),
+                      x2[1] + 2 * fp.pi]
         if value == 0:
-            print("%s2k%s-%s, 2k%s%s" % ((get_open(), ) + (pi_s, ) * 3 + (get_close(), )))
+            print("%s2k%s-%s, 2k%s%s" %
+                  ((get_open(), ) + (pi_s, ) * 3 + (get_close(), )))
         else:
-            print("%s2k%s%s%s, 2k%s%s%s%s" % (get_open(), pi_s, "+" if x1[1] > 0 else "", x1[0] if x1[1] != 0 else "", pi_s, "+" if x2[1] > 0 else "", x2[0], get_close()))
+            print("%s2k%s%s%s, 2k%s%s%s%s" % (get_open(
+            ), pi_s, "+" if x1[1] > 0 else "", x1[0] if x1[1] != 0 else "", pi_s, "+" if x2[1] > 0 else "", x2[0], get_close()))
     elif left.name == "cos":
         try:
             x1, x2 = get_trig("c", value)
@@ -566,16 +639,21 @@ def inequ(expr, val, op):
             x1, x2 = x2, x1
             x1 = [get_num_string(-2 * fp.pi + x1[1], True), -2 * fp.pi + x1[1]]
         if ("<" in op) and (value == 0):
-            print("%s2k%s+%s/2, 2k%s+3%s/2%s" % ((get_open(), ) + (pi_s, ) * 4 + (get_close(), )))
+            print("%s2k%s+%s/2, 2k%s+3%s/2%s" %
+                  ((get_open(), ) + (pi_s, ) * 4 + (get_close(), )))
         else:
-            print("%s2k%s%s%s, 2k%s%s%s%s" % (get_open(), pi_s, "+" if x1[1] >= 0 else "", x1[0], pi_s, "+" if x2[1] > 0 else "", x2[0], get_close()))
+            print("%s2k%s%s%s, 2k%s%s%s%s" % (get_open(
+            ), pi_s, "+" if x1[1] >= 0 else "", x1[0], pi_s, "+" if x2[1] > 0 else "", x2[0], get_close()))
     elif left.name == "tan":
         # tan最简单，看函数图像即可出结果
         sol = fp.atan(value)
         if ">" in op:
-            print("%sk%s%s%s, k%s+%s/2)" % (get_open(), pi_s, "+" if sol >= 0 else "", get_num_string(sol), pi_s, pi_s))
+            print("%sk%s%s%s, k%s+%s/2)" % (get_open(), pi_s,
+                  "+" if sol >= 0 else "", get_num_string(sol), pi_s, pi_s))
         elif "<" in op:
-            print("(k%s+%s/2, k%s%s%s%s" % (pi_s, pi_s, pi_s, "+" if sol >= 0 else "", get_num_string(sol), get_close()))
+            print("(k%s+%s/2, k%s%s%s%s" % (pi_s, pi_s, pi_s,
+                  "+" if sol >= 0 else "", get_num_string(sol), get_close()))
+
 
 def set_var(name, *args):
     global D
@@ -590,6 +668,7 @@ def set_var(name, *args):
                 print("Error: An invalid number!")
     else:
         print("Error: No variable named \"%s\"!" % name)
+
 
 if __name__ == "__main__":
     while True:
@@ -613,4 +692,3 @@ if __name__ == "__main__":
                     inequ(*args.split("<=", 1), "<")
             elif action == "set":
                 set_var(*args.split(" "))
-
