@@ -29,7 +29,7 @@ except:
     exit()
 import ast
 import re
-import math
+from math import gcd
 from numbers import Number
 from fractions import Fraction
 if __import__("sys").platform != "win32":
@@ -209,6 +209,16 @@ class Triangle():
     def get_unknown_angle(self):
         return [side for side in self.args.keys() if (side in ["A", "B", "C"] and self.args[side] is None)]
 
+    def can_use_heron_formular(self, which):
+        """判断是否可用海伦公式求三角形面积。"""
+        return (which == "area") and (len(self.get_unknown_side()) == 0)
+
+    def heron_formular(self):
+        """使用海伦公式。"""
+        p = (self.args["a"] + self.args["b"] + self.args["c"]) / 2
+        a, b, c = self.args["a"], self.args["b"], self.args["c"]
+        return fp.sqrt(p * (p - a) * (p - b) * (p - c))
+
     def can_use_Bb_sin(self, cond):
         """判断是否只有一角及其对边，且没有别的已知条件。
         且所求条件是一个含a、b、c任意几边的合法的Python表达式。
@@ -267,12 +277,14 @@ class Triangle():
         已实现(*)的求解方法如下：
         1. 使用正弦定理
         2. 使用余弦定理
-        3. 使用海伦公式
+        3. 使用海伦公式*
         4. 使用Bb型正弦解*
 
         @param which 某一个条件
         """
-        if self.can_use_Bb_sin(which):
+        if self.can_use_heron_formular(which):
+            return self.heron_formular()
+        elif self.can_use_Bb_sin(which):
             return self.Bb_sin(which)
 
 
@@ -317,6 +329,22 @@ unit_circle = [
     5 * fp.pi / 4,
     4 * fp.pi / 3
 ]
+
+
+def get_prod(value):
+    """把一个数分成几个素数之积（用于化简根式）。"""
+    i, result = 2, []
+    while True:
+        if value == i:
+            result.append(i)
+            break
+        if gcd(value, i) == i:
+            result.append(i)
+            value = value // i
+            i = 2
+            continue
+        i += 1
+    return result
 
 
 def get_num_string(value, always_p=False):
@@ -494,7 +522,7 @@ def equ(expr, val):
             }, left))
         elif left.name == "cos":
             formula = ["(2 * k * fp.pi + %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else ""),
-                       "(2 * k * fp.pi - %s) %s" % (sol, ("/ (%s)" % coeff) if left.coeff != 1 else "")]
+                       "(2 * k * fp.pi - %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else "")]
             print("x = " + build_sol({
                 "2*k%s" % pi_s: True,
                 chr(177): False,
@@ -666,6 +694,8 @@ def sol_trig(*args):
     if isinstance(solution, mpmath.ctx_iv.ivmpf):
         a, b = get_num_string(float(solution.a)), get_num_string(float(solution.b))
         print("(%s, %s)" % (a, b))
+    else:
+        print(get_num_string(float(solution)))
 
 
 def set_var(name, *args):
