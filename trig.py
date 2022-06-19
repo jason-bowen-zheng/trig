@@ -22,10 +22,14 @@
 # SOFTWARE.
 
 try:
+    import mpmath
     from mpmath import fp
 except:
-    print("'mpmath' isn't installed, use `pip install mpmath` to install it!")
+    print("Module \"mpmath\" isn't installed, please use `pip install mpmath` to install it!")
     exit()
+import ast
+import re
+import math
 from numbers import Number
 from fractions import Fraction
 if __import__("sys").platform != "win32":
@@ -84,28 +88,6 @@ class Add(Operator):
             return self
         raise TypeError()
 
-    def __repr__(self):
-        first, result = True, []
-        for item in self.args:
-            if isinstance(item, Number):
-                if item >= 0:
-                    result.append(("+" if not first else "") +
-                                  get_num_string(item, True))
-                else:
-                    result.append(get_num_string(item))
-            else:
-                if isinstance(item, Mul):
-                    if isinstance(item.args[0], Number):
-                        if item.args[0] > 0:
-                            result.append(
-                                ("+" if not first else "") + repr(item))
-                        else:
-                            result.append(repr(item))
-                else:
-                    result.append(("+" if not first else "") + repr(item))
-            first = False
-        return "".join(result)
-
 
 class Mul(Operator):
 
@@ -115,17 +97,6 @@ class Mul(Operator):
         for item in args:
             if isinstance(item, Number):
                 prefix *= item
-            else:
-                result.append(item)
-        if fp.almosteq(prefix, 1):
-            self.args = result
-        else:
-            self.args = [prefix] + result
-        prefix, result = 1, []
-        for item in self.args:
-            if isinstance(item, Mul) and isinstance(item.args[0], Number):
-                prefix *= 1 if item.args[0] > 0 else -1
-                result.append(Mul(abs(item.args[1]), item.args[1:]))
             else:
                 result.append(item)
         if fp.almosteq(prefix, 1):
@@ -150,11 +121,6 @@ class Mul(Operator):
             raise TypeError()
         return self
 
-    def __truediv__(self, other):
-        if isinstance(other, Number):
-            return Mul(self.args[0], Div(Mul(*self.args[1:]), other))
-        return Div(self, other)
-
     def __neg__(self):
         if isinstance(self.args[0], Number):
             self.args[0] *= -1
@@ -165,66 +131,6 @@ class Mul(Operator):
     def __radd__(self, other): return other + self
     def __sub__(self, other): return self + (-other)
     def __rmul__(self, other): return self * other
-
-    def __repr__(self):
-        result = []
-        for item in self.args:
-            if isinstance(item, Number):
-                result.append(get_num_string(item, True))
-            else:
-                if isinstance(item, (Add, Div)):
-                    result.append("(%s)" % item)
-                else:
-                    result.append(repr(item))
-        return "*".join(result)
-
-
-class Div(Operator):
-
-    def __init__(self, a, b):
-        assert isinstance(b, Number)
-        self.args = [a, b]
-
-    def __add__(self, other):
-        if isinstance(other, Div) and fp.almosteq(self.args[1], other.args[1]):
-            return Div(self.args[0] + other.args[0], self.args[1])
-
-    def __truediv__(self, other):
-        assert isinstance(other, Number)
-        self.args[1] *= other
-        return self
-
-    def __repr__(self):
-        if ("/" in get_num_string(self.args[1])) and (pi_s not in get_num_string(self.args[1])):
-            a, b = map(int, get_num_string(self.args[1]).split("/"))
-            if isinstance(self.args[0], Mul) and (isinstance(self.args[0].args[0], Number)):
-                a *= self.args[0].args[0]
-                return "%s%s/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), Mul(*self.args[0].args[1:]), b)
-            return "%s(%s)/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), self.args[0], b)
-        else:
-            if isinstance(self.args[0], Operator) and (not isinstance(self.args[0], Mul)):
-                return "(%s)/%s" % (self.args[0], self.args[1])
-            return "%s/%s" % (self.args[0], self.args[1])
-
-
-class Pow(Operator):
-
-    def __init__(self, a, b):
-        self.args = [a, b]
-
-    def __repr__(self):
-        a, b = self.args
-        if isinstance(a, Number) and (a < 0):
-            a = "(%s)" % int(a)
-        elif isinstance(a, Operator):
-            a = "(%s)" % a
-        else:
-            a = str(a)
-        if isinstance(b, Operator):
-            b = "(%s)" % b
-        else:
-            b = str(b)
-        return "%s**%s" % (a, b)
 
 
 class MathItem(object):
@@ -241,9 +147,7 @@ class MathItem(object):
     def __rsub__(self, other): return Add(other, -self)
     def __mul__(self, other): return Mul(self, other)
     def __rmul__(self, other): return Mul(other, self)
-    def __truediv__(self, other): return Div(self, other)
-    def __pow__(self, other): return Pow(self, other)
-    def __rpow__(self, other): return Pow(other, self)
+    def __truediv__(self, other): return Mul(self, 1 / other)
     def __neg__(self): return Mul(-1, self)
 
 
@@ -252,17 +156,7 @@ class Function(MathItem):
     def __init__(self, *args):
         super().__init__()
         self.name = "func"
-        self.args = args
-
-    def __repr__(self):
-        args = []
-        for item in self.args:
-            if isinstance(item, Number):
-                args.append(get_num_string(item, True))
-            else:
-                args.append(repr(item))
-        args = ",".join(args)
-        return "%s(%s)" % (self.name, args)
+        self.args = list(args)
 
 
 class Variable(MathItem):
@@ -270,20 +164,6 @@ class Variable(MathItem):
     def __init__(self, name="x"):
         super().__init__()
         self.name = name
-
-    def __repr__(self):
-        return "%s" % self.name
-
-
-class Const(Variable):
-
-    def __init__(self, name, value):
-        super().__init__()
-        self.name = name
-        self.value = value
-
-    def __float__(self):
-        return float(self.value)
 
 
 class sin(Function):
@@ -307,11 +187,92 @@ class tan(Function):
         self.name = "tan"
 
 
+class Triangle():
+
+    def __init__(self, **kwargs):
+        self.args = {}
+        for i in ["a", "b", "c", "A", "B", "c", "area", "cric"]:
+            if kwargs.get(i) is None:
+                self.args[i] = None
+            else:
+                self.args[i] = kwargs[i]
+
+    def get_known_side(self):
+        return [side for side in self.args.keys() if (side in ["a", "b", "c"] and self.args[side] is not None)]
+
+    def get_known_angle(self):
+        return [side for side in self.args.keys() if (side in ["A", "B", "C"] and self.args[side] is not None)]
+
+    def get_unknown_side(self):
+        return [side for side in self.args.keys() if (side in ["a", "b", "c"] and self.args[side] is None)]
+
+    def get_unknown_angle(self):
+        return [side for side in self.args.keys() if (side in ["A", "B", "C"] and self.args[side] is None)]
+
+    def can_use_Bb_sin(self, cond):
+        """判断是否只有一角及其对边，且没有别的已知条件。
+
+        且所求条件是一个含a、b、c任意几边的合法的Python表达式。
+        """
+        for c in "abc":
+            if (c in self.args) and (c.upper() in self.args):
+                try:
+                    if "**" in cond: return False
+                    eval(cond, {"a": 1, "b": 1, "c": 1, "__builtins__": None})
+                except:
+                    return False
+                else:
+                    return True
+        return False
+
+    def Bb_sin(self, which):
+        known_side = self.get_known_side()[0]
+        double_R = self.args[known_side] / fp.sin(self.args[known_side.upper()])
+        offset = 0
+        prefix, side, coeff = 1, [], {}
+        for now in ast.walk(ast.parse(which, mode="eval").body):
+            if isinstance(now, ast.Name):
+                if now.id not in side:
+                    side.append(now.id)
+            if isinstance(now, ast.BinOp):
+                if isinstance(now.left, ast.Name):
+                    coeff[now.left.id] = 1
+                if isinstance(now.right, ast.Name):
+                    coeff[now.right.id] = 1
+                if isinstance(now.left, ast.Constant):
+                    prefix = now.left.value
+                elif isinstance(now.left, ast.UnaryOp) and isinstance(now.left.op, ast.USub):
+                    prefix = -now.left.operand.value
+                if isinstance(now.op, ast.Mult):
+                    coeff[now.right.id] = prefix
+                elif isinstance(now.op, ast.Div):
+                    coeff[now.right.id] = 1 / prefix
+        if known_side in side:
+            offset = coeff[known_side] * self.args[known_side]
+            del coeff[known_side]
+        if len(coeff) == 1:
+            return mpmath.iv.sin([0, fp.pi - self.args[known_side.upper()]]) * double_R * list(coeff.values())[0] + offset
+        elif len(coeff) == 2:
+            a, b = coeff[self.get_unknown_side()[0]] * double_R, coeff[self.get_unknown_side()[1]] * double_R
+            phi = fp.pi - self.args[known_side.upper()]
+            A, phi = mpmath.polar((a * mpmath.cos(phi) + b) + (a * mpmath.sin(phi)) * 1j)
+            return mpmath.iv.sin(mpmath.iv.mpf([0, fp.pi - self.args[known_side.upper()]]) + phi) * A + offset
+
+
+    def solve(self, which):
+        """解三角形。
+
+        @param which 某一个条件
+        """
+        if self.can_use_Bb_sin(which):
+            return self.Bb_sin(which)
+
+
 # 定义域，通过set_var函数修改
 D = None
-# 表示圆周率的字符
+# 特殊字符
+ang_s = chr(8736)
 pi_s = chr(960)
-pi = Const(pi_s, fp.pi)
 # 特殊的三角方程的解集
 special = {
     "sin": {
@@ -362,7 +323,7 @@ def get_num_string(value, always_p=False):
     """
     if fp.almosteq(value, 0):
         return "0"
-    frac = Fraction(value / fp.pi).limit_denominator(1000)
+    frac = Fraction(value / fp.pi).limit_denominator(10000)
     a, b = frac.as_integer_ratio()
     if fp.almosteq(value, frac * fp.pi):
         if b == 1:
@@ -375,14 +336,14 @@ def get_num_string(value, always_p=False):
             else:
                 return "%s%s/%s" % (a if abs(a) != 1 else str(a).replace("1", ""), pi_s, b)
     else:
-        a, b = Fraction(value).limit_denominator(1000).as_integer_ratio()
+        a, b = Fraction(value).limit_denominator(10000).as_integer_ratio()
         if fp.almosteq(value, a / b):
             return "%s%s%s" % (a, "/" if b != 1 else "", "" if b == 1 else b)
         else:
             flag = "" if value > 0 else "-"
             a, b = Fraction(
-                value ** 2).limit_denominator(1000).as_integer_ratio()
-            if fp.almosteq(value ** 2, a / b):
+                value ** 2).limit_denominator(10000).as_integer_ratio()
+            if fp.almosteq(value ** 2, a / b, 1e-10):
                 return "%ssqrt(%s)%s%s" % (flag, a, "/" if b != 1 else "", "" if b == 1 else int(fp.sqrt(b)))
             else:
                 return str(value)
@@ -407,13 +368,13 @@ def get_trig(name, value):
     return result
 
 
-def trig_eval(s, left=False):
+def trig_eval(s, cond="num"):
     """解析输入的表达式
 
     @param s    某表达式
-    @param left 是否为等号左边的表达式
+    @param cond 何种类型
     """
-    if left:
+    if cond == "trig":
         if s == "s":
             return sin(Variable())
         elif s == "c":
@@ -424,8 +385,18 @@ def trig_eval(s, left=False):
         return eval(s, {"cos": lambda x: cos(x), "sin": lambda x: sin(x),
                         "sqrt": fp.sqrt, "pi": fp.pi, "tan": lambda x: tan(x),
                         "x": lambda: Variable("x"), "__builtins__": {}})
-    else:
+    elif cond == "num":
         return eval(s, {"sqrt": fp.sqrt, "pi": fp.pi, "__builtins__": {}})
+    elif cond == "ang":
+        return eval(s, {"asin": lambda x: fp.asin(x), "acos": lambda x: fp.acos(x),
+                        "atan": lambda x: fp.atan(x), "pi": fp.pi, "__builtins__": {}})
+
+
+def get_coeff_and_addend(left):
+    coeff, addend = 1, 0
+    if isinstance(left.args[0], Mul):
+        coeff = left.args[0].args[0] if isinstance(left.args[0].args[0], Number) else 1
+    return coeff
 
 
 def build_sol(expr, left):
@@ -434,13 +405,13 @@ def build_sol(expr, left):
     @param expr 包含解的字典
     @param left 左值
     """
-    x_coeff = left.args[0].args[0] if isinstance(left.args[0], Mul) else 1
+    x_coeff = get_coeff_and_addend(left)
     result = []
     for item, action in expr.items():
         if action == False:
             result.append(item)
         else:
-            if isinstance(item, (Number, fp.mpf)):
+            if isinstance(item, Number):
                 result.append(get_num_string(item / x_coeff))
             else:
                 if "*" in item:
@@ -474,7 +445,7 @@ def equ(expr, val):
     """
     global D
     try:
-        left = trig_eval(expr, True)
+        left = trig_eval(expr, "trig")
         if not is_simplest(left):
             print("ERROR: Only support simplest trigonometric equation!")
             return
@@ -502,7 +473,7 @@ def equ(expr, val):
                     return
     if get_num_string(sol).find(pi_s) != -1:
         # 可使用弧度表示的解集
-        coeff = left.args[0].args[0] if isinstance(left.args[0], Mul) else 1
+        coeff = get_coeff_and_addend(left)
         if left.name == "sin":
             formula = ["(k * fp.pi + (-1) ** k * %s) %s" %
                        (sol, ("/ (%s)" % coeff) if coeff != 1 else "")]
@@ -515,7 +486,7 @@ def equ(expr, val):
             }, left))
         elif left.name == "cos":
             formula = ["(2 * k * fp.pi + %s) %s" % (sol, ("/ (%s)" % coeff) if coeff != 1 else ""),
-                       "(2 * k * math.pi - %s) %s" % (sol, ("/ (%s)" % coeff) if left.coeff != 1 else "")]
+                       "(2 * k * fp.pi - %s) %s" % (sol, ("/ (%s)" % coeff) if left.coeff != 1 else "")]
             print("x = " + build_sol({
                 "2*k%s" % pi_s: True,
                 chr(177): False,
@@ -532,25 +503,29 @@ def equ(expr, val):
         # 如若设置了定义域，那么就在定义域内找解
         if D is not None:
             first, last, result = 0, 0, []
-            for expr in formula:
-                if (D[0] <= (x := eval(expr.replace("k", "(0)"))) <= D[1]):
-                    result.append(get_num_string(x))
-                    first, last = x, x
-                i, flag = 1, 1
-                while True:
-                    if (D[0] <= (x := eval(expr.replace("k", "(%s)" % i))) <= D[1]):
-                        if get_num_string(x) not in result:
-                            if x > last:
-                                result.append(get_num_string(x))
-                                last = x
-                            elif x < first:
-                                result.insert(0, get_num_string(x))
-                                first = x
-                        i += flag * 1
-                    else:
-                        if flag == -1:
-                            break
-                        i, flag = 1, -1
+            try:
+                for expr in formula:
+                    if (D[0] <= (x := eval(expr.replace("k", "(0)"))) <= D[1]):
+                        result.append(get_num_string(x))
+                        first, last = x, x
+                    i, flag = 1, 1
+                    while True:
+                        if (D[0] <= (x := eval(expr.replace("k", "(%s)" % i))) <= D[1]):
+                            if get_num_string(x) not in result:
+                                if x > last:
+                                    result.append(get_num_string(x))
+                                    last = x
+                                elif x < first:
+                                    result.insert(0, get_num_string(x))
+                                    first = x
+                            i += flag * 1
+                        else:
+                            if flag == -1:
+                                break
+                            i, flag = 1, -1
+            except KeyboardInterrupt:
+                print("You stop to find solution")
+                return
             print("Solution in D: {%s}" % ", ".join(result))
             D = None
     else:
@@ -585,7 +560,7 @@ def inequ(expr, val, op):
     @param op   不等号
     """
     try:
-        left = trig_eval(expr, True)
+        left = trig_eval(expr, "trig")
         if not is_simplest(left):
             print("ERROR: Only support simplest trigonometric inequation!")
             return
@@ -655,6 +630,36 @@ def inequ(expr, val, op):
                   "+" if sol >= 0 else "", get_num_string(sol), get_close()))
 
 
+def sol_trig(*args):
+    """解三角形。"""
+    kwargs = {}
+    which = False
+    for arg in args:
+        if which == True:
+            which = arg
+            break
+        if arg == "get":
+            which = True
+            continue
+        k, v = arg.split("=") 
+        try:
+            if k in ["a", "b", "c", "area", "cric"]:
+                kwargs[k] = trig_eval(v)
+            elif k in ["A", "B", "C"]:
+                kwargs[k] = trig_eval(v, "ang")
+        except:
+            print("Error: Bad argument: \"%s\"!" % arg)
+            return
+    if isinstance(which, bool):
+        print("Error: A unknow value must given!")
+        return
+    trig = Triangle(**kwargs)
+    solution = trig.solve(which)
+    if isinstance(solution, mpmath.ctx_iv.ivmpf):
+        a, b = get_num_string(float(solution.a)), get_num_string(float(solution.b))
+        print("(%s, %s)" % (a, b))
+
+
 def set_var(name, *args):
     global D
     if name == "D":
@@ -692,3 +697,6 @@ if __name__ == "__main__":
                     inequ(*args.split("<=", 1), "<")
             elif action == "set":
                 set_var(*args.split(" "))
+            elif action == "trig":
+                sol_trig(*args.split(" "))
+
