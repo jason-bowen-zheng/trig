@@ -211,8 +211,8 @@ class Triangle():
 
     def can_use_Bb_sin(self, cond):
         """判断是否只有一角及其对边，且没有别的已知条件。
-
         且所求条件是一个含a、b、c任意几边的合法的Python表达式。
+        可使用Bb型正弦解。
         """
         for c in "abc":
             if (c in self.args) and (c.upper() in self.args):
@@ -226,10 +226,12 @@ class Triangle():
         return False
 
     def Bb_sin(self, which):
+        """使用Bb型正弦解。"""
         known_side = self.get_known_side()[0]
         double_R = self.args[known_side] / fp.sin(self.args[known_side.upper()])
         offset = 0
         prefix, side, coeff = 1, [], {}
+        # 好吧，这里稍微复杂了一点。不过如此之复杂还没有解决问题qwq
         for now in ast.walk(ast.parse(which, mode="eval").body):
             if isinstance(now, ast.Name):
                 if now.id not in side:
@@ -254,13 +256,19 @@ class Triangle():
             return mpmath.iv.sin([0, fp.pi - self.args[known_side.upper()]]) * double_R * list(coeff.values())[0] + offset
         elif len(coeff) == 2:
             a, b = coeff[self.get_unknown_side()[0]] * double_R, coeff[self.get_unknown_side()[1]] * double_R
-            phi = fp.pi - self.args[known_side.upper()]
+            phi = self.args[known_side.upper()]
             A, phi = mpmath.polar((a * mpmath.cos(phi) + b) + (a * mpmath.sin(phi)) * 1j)
             return mpmath.iv.sin(mpmath.iv.mpf([0, fp.pi - self.args[known_side.upper()]]) + phi) * A + offset
 
 
     def solve(self, which):
         """解三角形。
+
+        已实现(*)的求解方法如下：
+        1. 使用正弦定理
+        2. 使用余弦定理
+        3. 使用海伦公式
+        4. 使用Bb型正弦解*
 
         @param which 某一个条件
         """
@@ -586,7 +594,7 @@ def inequ(expr, val, op):
             # 解集是逆时针找出的，需对调始终边
             x1, x2 = x2, x1
             if value > 0:
-                # 此时解集穿过x轴正半轴，需表示成(2*k*pi-a, 2*k*pi+b)
+                # 此时解集穿过x轴正半轴，需表示成(2kπ-α, 2kπ+β)
                 x1 = [get_num_string(-2 * fp.pi + x1[1],
                                      True), -2 * fp.pi + x1[1]]
             elif value < 0:
