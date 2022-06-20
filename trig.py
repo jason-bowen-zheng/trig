@@ -300,7 +300,10 @@ def get_num_string(value, always_p=False):
             a, b = Fraction(
                 value ** 2).limit_denominator(10000).as_integer_ratio()
             if fp.almosteq(value ** 2, a / b, 1e-10):
-                return "%s%s%s%s" % (flag, simplify_sqrt(a), "/" if b != 1 else "", "" if b == 1 else int(fp.sqrt(b)))
+                if (a == 1) and (b != 1):
+                    return "%ssqrt(%s)/%s" % (flag, b, b)
+                else:
+                    return "%s%s%s%s" % (flag, simplify_sqrt(a), "/" if b != 1 else "", "" if b == 1 else int(fp.sqrt(b)))
             else:
                 return str(value)
 
