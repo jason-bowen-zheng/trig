@@ -28,10 +28,9 @@ except:
     print("Module \"mpmath\" isn't installed, please use `pip install mpmath` to install it!")
     exit()
 import ast
-import re
+from fractions import Fraction
 from math import gcd
 from numbers import Number
-from fractions import Fraction
 if __import__("sys").platform != "win32":
     import readline
 
@@ -210,38 +209,31 @@ class Triangle():
         return [side for side in self.args.keys() if (side in ["A", "B", "C"] and self.args[side] is None)]
 
     def can_use_heron_formular(self, which):
-        """判断是否可用海伦公式求三角形面积。"""
         return (which == "area") and (len(self.get_unknown_side()) == 0)
 
     def heron_formular(self):
-        """使用海伦公式。"""
         p = (self.args["a"] + self.args["b"] + self.args["c"]) / 2
         a, b, c = self.args["a"], self.args["b"], self.args["c"]
         return fp.sqrt(p * (p - a) * (p - b) * (p - c))
 
     def can_use_Bb_sin(self, cond):
-        """判断是否只有一角及其对边，且没有别的已知条件。
-        且所求条件是一个含a、b、c任意几边的合法的Python表达式。
-        可使用Bb型正弦解。
-        """
         for c in "abc":
             if (c in self.args) and (c.upper() in self.args):
                 try:
-                    if "**" in cond: return False
-                    eval(cond, {"a": 1, "b": 1, "c": 1, "__builtins__": None})
+                    result = eval(
+                        cond, {"a": 1, "b": 1, "c": 1, "__builtins__": None})
+                    if isinstance(result, (int, float)):
+                        return True
                 except:
                     return False
-                else:
-                    return True
         return False
 
     def Bb_sin(self, which):
-        """使用Bb型正弦解。"""
         known_side = self.get_known_side()[0]
-        double_R = self.args[known_side] / fp.sin(self.args[known_side.upper()])
+        double_R = self.args[known_side] / \
+            fp.sin(self.args[known_side.upper()])
         offset = 0
         prefix, side, coeff = 1, [], {}
-        # 好吧，这里稍微复杂了一点。不过如此之复杂还没有解决问题qwq
         for now in ast.walk(ast.parse(which, mode="eval").body):
             if isinstance(now, ast.Name):
                 if now.id not in side:
@@ -265,23 +257,14 @@ class Triangle():
         if len(coeff) == 1:
             return mpmath.iv.sin([0, fp.pi - self.args[known_side.upper()]]) * double_R * list(coeff.values())[0] + offset
         elif len(coeff) == 2:
-            a, b = coeff[self.get_unknown_side()[0]] * double_R, coeff[self.get_unknown_side()[1]] * double_R
+            a, b = coeff[self.get_unknown_side()[0]] * \
+                double_R, coeff[self.get_unknown_side()[1]] * double_R
             phi = self.args[known_side.upper()]
-            A, phi = mpmath.polar((a * mpmath.cos(phi) + b) + (a * mpmath.sin(phi)) * 1j)
+            A, phi = mpmath.polar(
+                (a * mpmath.cos(phi) + b) + (a * mpmath.sin(phi)) * 1j)
             return mpmath.iv.sin(mpmath.iv.mpf([0, fp.pi - self.args[known_side.upper()]]) + phi) * A + offset
 
-
     def solve(self, which):
-        """解三角形。
-
-        已实现(*)的求解方法如下：
-        1. 使用正弦定理
-        2. 使用余弦定理
-        3. 使用海伦公式*
-        4. 使用Bb型正弦解*
-
-        @param which 某一个条件
-        """
         if self.can_use_heron_formular(which):
             return self.heron_formular()
         elif self.can_use_Bb_sin(which):
@@ -431,7 +414,8 @@ def trig_eval(s, cond="num"):
 def get_coeff_and_addend(left):
     coeff, addend = 1, 0
     if isinstance(left.args[0], Mul):
-        coeff = left.args[0].args[0] if isinstance(left.args[0].args[0], Number) else 1
+        coeff = left.args[0].args[0] if isinstance(
+            left.args[0].args[0], Number) else 1
     return coeff
 
 
@@ -677,7 +661,7 @@ def sol_trig(*args):
         if arg == "get":
             which = True
             continue
-        k, v = arg.split("=") 
+        k, v = arg.split("=")
         try:
             if k in ["a", "b", "c", "area", "cric"]:
                 kwargs[k] = trig_eval(v)
@@ -692,8 +676,11 @@ def sol_trig(*args):
     trig = Triangle(**kwargs)
     solution = trig.solve(which)
     if isinstance(solution, mpmath.ctx_iv.ivmpf):
-        a, b = get_num_string(float(solution.a)), get_num_string(float(solution.b))
+        a, b = get_num_string(
+            float(solution.a)), get_num_string(float(solution.b))
         print("(%s, %s)" % (a, b))
+    elif solution is None:
+        print("This triangle is unsolvable!")
     else:
         print(get_num_string(float(solution)))
 
@@ -737,4 +724,3 @@ if __name__ == "__main__":
                 set_var(*args.split(" "))
             elif action == "trig":
                 sol_trig(*args.split(" "))
-
