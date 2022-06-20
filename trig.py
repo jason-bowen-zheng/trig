@@ -27,7 +27,7 @@ try:
 except:
     print("Module \"mpmath\" isn't installed, please use `pip install mpmath` to install it!")
     exit()
-import ast
+import re
 from fractions import Fraction
 from math import gcd
 from numbers import Number
@@ -37,55 +37,6 @@ if __import__("sys").platform != "win32":
 
 class Operator(object):
     pass
-
-
-class Add(Operator):
-
-    def __init__(self, *args):
-        prefix, result = 0, []
-        for item in args:
-            if isinstance(item, Number):
-                prefix += item
-            else:
-                result.append(item)
-        if prefix != 0:
-            self.args = result + [prefix]
-        else:
-            self.args = result
-
-    def __add__(self, other):
-        if isinstance(other, Number) and isinstance(self.args[-1], Number):
-            self.args[-1] += other
-        elif isinstance(other, (Number, MathItem, Operator)):
-            for i in range(len(self.args)):
-                if isinstance(self.args[i], Mul) and isinstance(other, Mul):
-                    if isinstance(self.args[i] + other, Mul):
-                        self.args[i] += other
-                        return self
-            self.args.append(other)
-        else:
-            raise TypeError()
-        return self
-
-    def __radd__(self, other): return other + self
-
-    def __sub__(self, other):
-        if isinstance(other, Number) and isinstance(self.args[-1], Number):
-            self.args[-1] -= other
-        if isinstance(other, (Number, MathItem, Operator)):
-            self.args.append(-other)
-        else:
-            raise TypeError()
-        return self
-
-    def __truediv__(self, other):
-        if isinstance(other, Number):
-            result = []
-            for item in self.args:
-                result.append(item / other)
-            self.args = result
-            return self
-        raise TypeError()
 
 
 class Mul(Operator):
@@ -103,18 +54,12 @@ class Mul(Operator):
         else:
             self.args = [prefix] + result
 
-    def __add__(self, other):
-        if isinstance(other, Mul) and (len(self.args) == 2) and isinstance(self.args[0], Number):
-            if (len(other.args) == 2) and isinstance(other.args[0], Number) and (other.args[-1] == self.args[-1]):
-                return Mul(self.args[0] + other.args[0], self.args[-1])
-        return Add(self, other)
-
     def __mul__(self, other):
         if isinstance(other, Number) and isinstance(self.args[0], Number):
             self.args[0] *= other
         elif isinstance(other, Number):
             self.args.insert(0, other)
-        elif isinstance(other, (MathItem, Operator)):
+        elif isinstance(other, MathItem):
             self.args.append(other)
         else:
             raise TypeError()
@@ -127,8 +72,6 @@ class Mul(Operator):
             self.args.insert(0, -1)
         return self
 
-    def __radd__(self, other): return other + self
-    def __sub__(self, other): return self + (-other)
     def __rmul__(self, other): return self * other
 
 
@@ -221,7 +164,7 @@ class Triangle():
             if (c in self.args) and (c.upper() in self.args):
                 try:
                     result = eval(
-                        cond, {"a": 1, "b": 1, "c": 1, "__builtins__": None})
+                        cond, {"a": 0, "b": 0, "c": 0, "__builtins__": None})
                     if isinstance(result, (int, float)):
                         return True
                 except:
@@ -232,26 +175,13 @@ class Triangle():
         known_side = self.get_known_side()[0]
         double_R = self.args[known_side] / \
             fp.sin(self.args[known_side.upper()])
-        offset = 0
-        prefix, side, coeff = 1, [], {}
-        for now in ast.walk(ast.parse(which, mode="eval").body):
-            if isinstance(now, ast.Name):
-                if now.id not in side:
-                    side.append(now.id)
-            if isinstance(now, ast.BinOp):
-                if isinstance(now.left, ast.Name):
-                    coeff[now.left.id] = 1
-                if isinstance(now.right, ast.Name):
-                    coeff[now.right.id] = 1
-                if isinstance(now.left, ast.Constant):
-                    prefix = now.left.value
-                elif isinstance(now.left, ast.UnaryOp) and isinstance(now.left.op, ast.USub):
-                    prefix = -now.left.operand.value
-                if isinstance(now.op, ast.Mult):
-                    coeff[now.right.id] = prefix
-                elif isinstance(now.op, ast.Div):
-                    coeff[now.right.id] = 1 / prefix
-        if known_side in side:
+        start, offset, coeff = 0, 0, {}
+        d = {"a": which.find("*a"), "b": which.find("*b"), "c": which.find("*c")}
+        for symbol, index in d.items():
+            if index != -1:
+                coeff[symbol] = eval(which[start: index])
+                start = index + 2
+        if known_side in coeff:
             offset = coeff[known_side] * self.args[known_side]
             del coeff[known_side]
         if len(coeff) == 1:
@@ -314,8 +244,8 @@ unit_circle = [
 ]
 
 
-def get_prod(value):
-    """把一个数分成几个素数之积（用于化简根式）。"""
+def simplify_sqrt(value):
+    """化简根式。"""
     i, result = 2, []
     while True:
         if value == i:
@@ -327,7 +257,14 @@ def get_prod(value):
             i = 2
             continue
         i += 1
-    return result
+    inner, outter = [], 1
+    for i in result:
+        if inner.count(i) == 1:
+            inner.remove(i)
+            outter *= i
+        else:
+            inner.append(i)
+    return "%ssqrt(%d)" % ("" if outter == 1 else outter, fp.fprod(inner))
 
 
 def get_num_string(value, always_p=False):
@@ -363,7 +300,7 @@ def get_num_string(value, always_p=False):
             a, b = Fraction(
                 value ** 2).limit_denominator(10000).as_integer_ratio()
             if fp.almosteq(value ** 2, a / b, 1e-10):
-                return "%ssqrt(%s)%s%s" % (flag, a, "/" if b != 1 else "", "" if b == 1 else int(fp.sqrt(b)))
+                return "%s%s%s%s" % (flag, simplify_sqrt(a), "/" if b != 1 else "", "" if b == 1 else int(fp.sqrt(b)))
             else:
                 return str(value)
 

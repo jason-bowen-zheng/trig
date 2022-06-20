@@ -31,7 +31,7 @@ Solution in D: {π/6, 5π/6}
 
 ### 解三角形
 ```
->>> trig b=sqrt(3) B=pi/3 get 2*a+c
+>>> trig b=sqrt(3) B=pi/3 get 2*a+1*c
 (sqrt(3), 2sqrt(7))
 ```
 
