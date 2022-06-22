@@ -203,6 +203,7 @@ class Triangle():
 
 # 定义域，通过set_var函数修改
 D = None
+has_try_arcus = False
 # 特殊字符
 ang_s = chr(8736)
 pi_s = chr(960)
@@ -267,16 +268,19 @@ def simplify_sqrt(value):
     return "%ssqrt(%d)" % ("" if outter == 1 else outter, fp.fprod(inner))
 
 
-def get_num_string(value, always_p=False):
+def get_num_string(value, always_p=False, arcus_name="asin"):
     """返回一些有理数/无理数的分式表示
 
     1. 弧度
     2. 分数
     3. sqrt(a)/b型的数
+    4. 反三角
 
-    @param value    某浮点数
-    @param always_p 返回的弧度是否为正（在弧度值本身为正的情况下），若为True则返回5pi/3而非-pi/3
+    @param value      某浮点数
+    @param always_p   返回的弧度是否为正（在弧度值本身为正的情况下），若为True则返回5pi/3而非-pi/3
+    @param arcus_name 使用哪个反三角名
     """
+    global has_try_arcus
     if fp.almosteq(value, 0):
         return "0"
     frac = Fraction(value / fp.pi).limit_denominator(10000)
@@ -305,7 +309,16 @@ def get_num_string(value, always_p=False):
                 else:
                     return "%s%s%s%s" % (flag, simplify_sqrt(a), "/" if b != 1 else "", "" if b == 1 else int(fp.sqrt(b)))
             else:
-                return str(value)
+                if arcus_name == "asin": f = fp.sin
+                elif arcus_name == "acos": f = fp.cos
+                elif arcus_name == "atan": f = fp.tan
+                if has_try_arcus:
+                    has_try_arcus = False
+                    return str(value)
+                has_try_arcus = True
+                if get_num_string(f(value))[:10] != str(value)[:10]:
+                    has_try_arcus = False
+                    return "%s(%s)" % (arcus_name, get_num_string(f(value)))
 
 
 def get_trig(name, value):
@@ -496,19 +509,19 @@ def equ(expr, val):
                 "+" if sol > 0 else "-": False,
                 "(-1)**k": False,
                 "*": False,
-                "arcsin(%s)" % get_num_string(abs(val)): True
+                "asin(%s)" % get_num_string(abs(val)): True
             }, left))
         elif left.name == "cos":
             print("x = " + build_sol({
                 "2*k%s" % pi_s: True,
                 chr(177): False,
-                "arccos(%s)" % get_num_string(val): True
+                "acos(%s)" % get_num_string(val): True
             }, left))
         elif left.name == "tan":
             print("x = " + build_sol({
                 "k%s" % pi_s: True,
                 "+" if sol > 0 else "-": False,
-                "arctan(%s)" % get_num_string(abs(val)): True
+                "atan(%s)" % get_num_string(abs(val)): True
             }, left))
 
 
