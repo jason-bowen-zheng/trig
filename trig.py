@@ -187,9 +187,11 @@ class Triangle():
         if len(coeff) == 1:
             return mpmath.iv.sin([0, fp.pi - self.args[known_side.upper()]]) * double_R * list(coeff.values())[0] + offset
         elif len(coeff) == 2:
+            # 以下计算a*sin(x+phi)+b*sin(x)+c的值域，使用了辅助角公式
             a, b = coeff[self.get_unknown_side()[0]] * \
                 double_R, coeff[self.get_unknown_side()[1]] * double_R
             phi = self.args[known_side.upper()]
+            # 复数的三角形式和辅助角公式是类似的
             A, phi = mpmath.polar(
                 (a * mpmath.cos(phi) + b) + (a * mpmath.sin(phi)) * 1j)
             return mpmath.iv.sin(mpmath.iv.mpf([0, fp.pi - self.args[known_side.upper()]]) + phi) * A + offset
@@ -269,12 +271,14 @@ def simplify_sqrt(value):
 
 
 def get_num_string(value, always_p=False, arcus_name="asin"):
-    """返回一些有理数/无理数的分式表示
+    """返回一些有理数/无理数的分式表示：
 
     1. 弧度
-    2. 分数
+    2. 分子、分母都为整数的分数
     3. sqrt(a)/b型的数
     4. 反三角
+
+    另请注意：不要嵌套两个不一样的反三角函数，返回的结果可能很长且不正确。
 
     @param value      某浮点数
     @param always_p   返回的弧度是否为正（在弧度值本身为正的情况下），若为True则返回5pi/3而非-pi/3
@@ -316,9 +320,9 @@ def get_num_string(value, always_p=False, arcus_name="asin"):
                     has_try_arcus = False
                     return str(value)
                 has_try_arcus = True
-                if get_num_string(f(value))[:10] != str(value)[:10]:
+                if get_num_string(f(value), arcus_name=arcus_name)[:10] != str(value)[:10]:
                     has_try_arcus = False
-                    return "%s(%s)" % (arcus_name, get_num_string(f(value)))
+                    return "%s(%s)" % (arcus_name, get_num_string(f(value), arcus_name=arcus_name))
 
 
 def get_trig(name, value):
@@ -375,7 +379,7 @@ def get_coeff_and_addend(left):
 def build_sol(expr, left):
     """根据左值和最简方程的解构建最终解
 
-    @param expr 包含解的字典
+    @param expr 包含解和一些控制标志的字典
     @param left 左值
     """
     x_coeff = get_coeff_and_addend(left)
