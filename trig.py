@@ -570,7 +570,7 @@ def inequ(expr, val, op):
                 # 此时终小于始，需调整
                 x2 = [get_num_string(x2[1] + 2 * fp.pi, True),
                       x2[1] + 2 * fp.pi]
-        if value == 0:
+        if ("<" in op) and (value = 0):
             print("%s2k%s-%s, 2k%s%s" %
                   ((get_open(), ) + (pi_s, ) * 3 + (get_close(), )))
         else:
