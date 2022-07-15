@@ -155,6 +155,7 @@ class Triangle():
         return (which == "area") and (len(self.get_unknown_side()) == 0)
 
     def heron_formular(self):
+        """使用海伦公式求面积"""
         p = (self.args["a"] + self.args["b"] + self.args["c"]) / 2
         a, b, c = self.args["a"], self.args["b"], self.args["c"]
         return fp.sqrt(p * (p - a) * (p - b) * (p - c))
@@ -172,6 +173,7 @@ class Triangle():
         return False
 
     def Bb_sin(self, which):
+        """已知一边及其对角求三边的线性组合"""
         known_side = self.get_known_side()[0]
         double_R = self.args[known_side] / \
             fp.sin(self.args[known_side.upper()])
@@ -226,7 +228,7 @@ special = {
     }
 }
 # 单位圆的弧度圈，逆时针方向，从-pi/2开始
-# 为什么是-pi/2而非0呢？很简单，cos(x)>a需要纵截单位圆，这样便于程序设计，且也便于sin(x)>a的运算（横截的话左右对称）
+# 为什么是-pi/2而非0呢？很简单，cos(x)>a需要纵截单位圆，这样便于程序设计，且也便于sin(x)>a的运算
 unit_circle = [
     -fp.pi / 2,
     -fp.pi / 3,
@@ -248,7 +250,10 @@ unit_circle = [
 
 
 def simplify_sqrt(value):
-    """化简根式。"""
+    """化简根式
+
+    @param value 根号内的正整数
+    """
     i, result = 2, []
     while True:
         if value == i:
@@ -281,7 +286,7 @@ def get_num_string(value, always_p=False, arcus_name="asin"):
     另请注意：不要嵌套两个不一样的反三角函数，返回的结果可能很长且不正确。
 
     @param value      某浮点数
-    @param always_p   返回的弧度是否为正（在弧度值本身为正的情况下），若为True则返回5pi/3而非-pi/3
+    @param always_p   返回的弧度是否为正（在弧度值本身为正的情况下），若为True则返回5π/3而非-π/3
     @param arcus_name 使用哪个反三角名
     """
     global has_try_arcus
@@ -307,6 +312,7 @@ def get_num_string(value, always_p=False, arcus_name="asin"):
             flag = "" if value > 0 else "-"
             a, b = Fraction(
                 value ** 2).limit_denominator(10000).as_integer_ratio()
+            # 由于计算机算术的误差，不得不设置一个1e-10的误差
             if fp.almosteq(value ** 2, a / b, 1e-10):
                 if (a == 1) and (b != 1):
                     return "%ssqrt(%s)/%s" % (flag, b, b)
@@ -478,6 +484,7 @@ def equ(expr, val):
                 abs(sol): True,
             }, left))
         # 如若设置了定义域，那么就在定义域内找解
+        # 请注意，算法得出正确解集的充分条件为：即参量为±1时解必在定义域内
         if D is not None:
             first, last, result = 0, 0, []
             try:
@@ -487,7 +494,7 @@ def equ(expr, val):
                         first, last = x, x
                     i, flag = 1, 1
                     while True:
-                        if (D[0] <= (x := eval(expr.replace("k", "(%s)" % i))) <= D[1]):
+                        if D[0] <= (x := eval(expr.replace("k", "(%s)" % i))) <= D[1]:
                             if get_num_string(x) not in result:
                                 if x > last:
                                     result.append(get_num_string(x))
@@ -570,7 +577,7 @@ def inequ(expr, val, op):
                 # 此时终小于始，需调整
                 x2 = [get_num_string(x2[1] + 2 * fp.pi, True),
                       x2[1] + 2 * fp.pi]
-        if ("<" in op) and (value = 0):
+        if ("<" in op) and (value == 0):
             print("%s2k%s-%s, 2k%s%s" %
                   ((get_open(), ) + (pi_s, ) * 3 + (get_close(), )))
         else:
@@ -608,7 +615,7 @@ def inequ(expr, val, op):
 
 
 def sol_trig(*args):
-    """解三角形。"""
+    """解三角形"""
     kwargs = {}
     which = False
     for arg in args:
