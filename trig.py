@@ -163,6 +163,8 @@ class Triangle():
     def can_use_Bb_sin(self, cond):
         for c in "abc":
             if (c in self.args) and (c.upper() in self.args):
+                if cond == "area":
+                    return True
                 try:
                     result = eval(
                         cond, {"a": 0, "b": 0, "c": 0, "__builtins__": None})
@@ -173,11 +175,16 @@ class Triangle():
         return False
 
     def Bb_sin(self, which):
-        """已知一边及其对角求三边的线性组合"""
+        """已知一边及其对角求三边的线性组合及面积的范围"""
         known_side = self.get_known_side()[0]
+        phi = self.args[known_side.upper()]
         double_R = self.args[known_side] / \
             fp.sin(self.args[known_side.upper()])
         start, offset, coeff = 0, 0, {}
+        if which == "area":
+            # 求面积的范围
+            A, phi = mpmath.polar((mpmath.sin(phi) / 2) - (mpmath.cos(phi) / 2) * 1j)
+            return (mpmath.iv.sin(mpmath.iv.mpf([0, fp.pi - self.args[known_side.upper()]]) * 2 + phi) * A + mpmath.cos(self.args[known_side.upper()]) / 2) * self.args[known_side] * double_R / 2
         d = {"a": which.find("*a"), "b": which.find("*b"), "c": which.find("*c")}
         for symbol, index in d.items():
             if index != -1:
@@ -192,7 +199,6 @@ class Triangle():
             # 以下计算a*sin(x+phi)+b*sin(x)+c的值域，使用了辅助角公式
             a, b = coeff[self.get_unknown_side()[0]] * \
                 double_R, coeff[self.get_unknown_side()[1]] * double_R
-            phi = self.args[known_side.upper()]
             # 复数的三角形式和辅助角公式是类似的
             A, phi = mpmath.polar(
                 (a * mpmath.cos(phi) + b) + (a * mpmath.sin(phi)) * 1j)
@@ -207,7 +213,6 @@ class Triangle():
 
 # 定义域，通过set_var函数修改
 D = None
-has_try_arcus = False
 # 特殊字符
 ang_s = chr(8736)
 pi_s = chr(960)
@@ -275,19 +280,15 @@ def simplify_sqrt(value):
     return "%ssqrt(%d)" % ("" if outter == 1 else outter, fp.fprod(inner))
 
 
-def get_num_string(value, always_p=False, arcus_name="asin"):
+def get_num_string(value, always_p=False):
     """返回一些有理数/无理数的分式表示：
 
     1. 弧度
     2. 分子、分母都为整数的分数
     3. sqrt(a)/b型的数
-    4. 反三角
-
-    另请注意：不要嵌套两个不一样的反三角函数，返回的结果可能很长且不正确。
 
     @param value      某浮点数
     @param always_p   返回的弧度是否为正（在弧度值本身为正的情况下），若为True则返回5π/3而非-π/3
-    @param arcus_name 使用哪个反三角名
     """
     global has_try_arcus
     if fp.almosteq(value, 0):
@@ -319,16 +320,7 @@ def get_num_string(value, always_p=False, arcus_name="asin"):
                 else:
                     return "%s%s%s%s" % (flag, simplify_sqrt(a), "/" if b != 1 else "", "" if b == 1 else int(fp.sqrt(b)))
             else:
-                if arcus_name == "asin": f = fp.sin
-                elif arcus_name == "acos": f = fp.cos
-                elif arcus_name == "atan": f = fp.tan
-                if has_try_arcus:
-                    has_try_arcus = False
-                    return str(value)
-                has_try_arcus = True
-                if get_num_string(f(value), arcus_name=arcus_name)[:10] != str(value)[:10]:
-                    has_try_arcus = False
-                    return "%s(%s)" % (arcus_name, get_num_string(f(value), arcus_name=arcus_name))
+                return str(value)
 
 
 def get_trig(name, value):
