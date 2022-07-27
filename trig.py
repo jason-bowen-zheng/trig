@@ -27,7 +27,6 @@ try:
 except:
     print("Module \"mpmath\" isn't installed, please use `pip install mpmath` to install it!")
     exit()
-import re
 from fractions import Fraction
 from math import gcd
 from numbers import Number
@@ -35,70 +34,68 @@ if __import__("sys").platform != "win32":
     import readline
 
 
-class Operator(object):
-    pass
+class Combination():
 
+    def __init__(self, coeff):
+        # 线性组合
+        self.coeff = coeff
+        if "addend" not in self.coeff:
+            self.coeff["addend"] = 0
 
-class Mul(Operator):
-
-    def __init__(self, *args):
-        self.args = list(args)
-        prefix, result = 1, []
-        for item in args:
-            if isinstance(item, Number):
-                prefix *= item
-            else:
-                result.append(item)
-        if fp.almosteq(prefix, 1):
-            self.args = result
-        else:
-            self.args = [prefix] + result
-
-    def __mul__(self, other):
-        if isinstance(other, Number) and isinstance(self.args[0], Number):
-            self.args[0] *= other
-        elif isinstance(other, Number):
-            self.args.insert(0, other)
-        elif isinstance(other, MathItem):
-            self.args.append(other)
-        else:
-            raise TypeError()
+    def __add__(self, other):
+        if isinstance(other, Number):
+            self.coeff["addend"] += other
+        elif isinstance(other, Variable) and (self.coeff.get(other) is None):
+            self.coeff[other] = 1
+        elif isinstance(other, Variable) and (self.coeff.get(other) is not None):
+            self.coeff[other] += 1
+        elif isinstance(other, Combination):
+            for k, v in other.coeff.items():
+                if k in self.coeff:
+                    self.coeff[k] += v
+                else:
+                    self.coeff[k] = v
         return self
 
-    def __neg__(self):
-        if isinstance(self.args[0], Number):
-            self.args[0] *= -1
-        else:
-            self.args.insert(0, -1)
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __sub__(self, other):
+        if isinstance(other, Number):
+            self.coeff["addend"] -= other
+        elif isinstance(other, Combination):
+            for k, v in other.coeff.items():
+                if k in self.coeff:
+                    self.coeff[k] -= v
+                    if self.coeff[k] == 0:
+                        del self.coeff[k]
+                else:
+                    self.coeff[k] = -v
         return self
 
-    def __rmul__(self, other): return self * other
 
-
-class MathItem(object):
+class MathItem():
 
     def __init__(self):
         self.name = ""
 
-    def __eq__(self, other): return isinstance(
-        other, self.__class__) and (self.name == other.name)
+    def __eq__(self, other):
+        return isinstance(self, other.__class__) and self.name == getattr(other, "name", "")
 
-    def __add__(self, other): return Add(self, other)
-    def __radd__(self, other): return Add(other, self)
-    def __sub__(self, other): return Add(self, -other)
-    def __rsub__(self, other): return Add(other, -self)
-    def __mul__(self, other): return Mul(self, other)
-    def __rmul__(self, other): return Mul(other, self)
-    def __truediv__(self, other): return Mul(self, 1 / other)
-    def __neg__(self): return Mul(-1, self)
+    def __hash__(self):
+        return hash("%s(%s)" % (self.__class__.__name__, self.name))
 
 
 class Function(MathItem):
 
-    def __init__(self, *args):
+    def __init__(self, name=""):
         super().__init__()
-        self.name = "func"
+        self.name = name
+        self.args = []
+
+    def __call__(self, *args):
         self.args = list(args)
+        return self
 
 
 class Variable(MathItem):
@@ -107,26 +104,55 @@ class Variable(MathItem):
         super().__init__()
         self.name = name
 
+    def __add__(self, other):
+        if isinstance(other, Number):
+            return Combination({self: 1, "addend": other})
+        elif isinstance(other, Variable) and self.name == other.name:
+            return Combination({self: 2})
+        else:
+           raise RuntimeError()
 
-class sin(Function):
+    def __radd__(self, other):
+        return self.__add__(other)
 
-    def __init__(self, x):
-        super().__init__(x)
-        self.name = "sin"
+    def __sub__(self, other):
+        if isinstance(other, Number):
+            return Combination({self: 1, "addend": -other})
+        elif isinstance(other, Variable):
+            return 0
+        else:
+            raise RuntimeError()
+
+    def __rsub__(self, other):
+        if isinstance(other, Number):
+            return Combination({self: -1, "addend": other})
+        elif isinstance(other, Variable):
+            return 0
+        else:
+            raise RuntimeError()
+
+    def __mul__(self, other):
+        if isinstance(other, Number):
+            return Combination({self: other})
+        else:
+            raise RuntimeError()
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __truediv__(self, other):
+        if isinstance(other, Number):
+            return Combination({self: 1 / other})
+        else:
+            raise RuntimeError()
+
+    def __repr__(self):
+        return self.name
 
 
-class cos(Function):
-
-    def __init__(self, x):
-        super().__init__(x)
-        self.name = "cos"
-
-
-class tan(Function):
-
-    def __init__(self, x):
-        super().__init__(x)
-        self.name = "tan"
+func_sin = Function("sin")
+func_cos = Function("cos")
+func_tan = Function("tan")
 
 
 class Triangle():
@@ -166,30 +192,34 @@ class Triangle():
                 if cond == "area":
                     return True
                 try:
-                    result = eval(
-                        cond, {"a": 0, "b": 0, "c": 0, "__builtins__": None})
-                    if isinstance(result, (int, float)):
+                    result = eval(cond, {"a": Variable("a"), "b": Variable("b"),
+                                         "c": Variable("c"), "__builtins__": None})
+                    if isinstance(result, Combination):
                         return True
+                    return False
                 except:
                     return False
         return False
 
     def Bb_sin(self, which):
-        """已知一边及其对角求三边的线性组合及面积的范围"""
+        """已知一边及其对角求三边的线性组合及面积的范围
+
+        以下的算法都涉及了对公式的推导
+        """
         known_side = self.get_known_side()[0]
         phi = self.args[known_side.upper()]
         double_R = self.args[known_side] / \
             fp.sin(self.args[known_side.upper()])
-        start, offset, coeff = 0, 0, {}
         if which == "area":
             # 求面积的范围
             A, phi = mpmath.polar((mpmath.sin(phi) / 2) - (mpmath.cos(phi) / 2) * 1j)
             return (mpmath.iv.sin(mpmath.iv.mpf([0, fp.pi - self.args[known_side.upper()]]) * 2 + phi) * A + mpmath.cos(self.args[known_side.upper()]) / 2) * self.args[known_side] * double_R / 2
-        d = {"a": which.find("*a"), "b": which.find("*b"), "c": which.find("*c")}
-        for symbol, index in d.items():
-            if index != -1:
-                coeff[symbol] = eval(which[start: index])
-                start = index + 2
+        coeff, offset = {}, 0
+        expr = eval(which, {"a": Variable("a"), "b": Variable("b"),
+                           "c": Variable("c"), "__builtins__": None})
+        for char in ["a", "b", "c"]:
+            if (value := expr.coeff.get(Variable(char))) is not None:
+                coeff[char] = value
         if known_side in coeff:
             offset = coeff[known_side] * self.args[known_side]
             del coeff[known_side]
@@ -350,15 +380,14 @@ def trig_eval(s, cond="num"):
     """
     if cond == "trig":
         if s == "s":
-            return sin(Variable())
+            return func_sin(Variable())
         elif s == "c":
-            return cos(Variable())
+            return func_cos(Variable())
         elif s == "t":
-            return tan(Variable())
-        s = s.replace("x", "x()")
-        return eval(s, {"cos": lambda x: cos(x), "sin": lambda x: sin(x),
-                        "sqrt": fp.sqrt, "pi": fp.pi, "tan": lambda x: tan(x),
-                        "x": lambda: Variable("x"), "__builtins__": {}})
+            return func_tan(Variable())
+        return eval(s, {"cos": lambda x: func_cos(x), "sin": lambda x: func_sin(x),
+                        "sqrt": fp.sqrt, "pi": fp.pi, "tan": lambda x: func_tan(x),
+                        "x": Variable(), "__builtins__": {}})
     elif cond == "num":
         return eval(s, {"sqrt": fp.sqrt, "pi": fp.pi, "__builtins__": {}})
     elif cond == "ang":
@@ -367,11 +396,9 @@ def trig_eval(s, cond="num"):
 
 
 def get_coeff_and_addend(left):
-    coeff, addend = 1, 0
-    if isinstance(left.args[0], Mul):
-        coeff = left.args[0].args[0] if isinstance(
-            left.args[0].args[0], Number) else 1
-    return coeff
+    if isinstance(left.args[0], Variable):
+        return 1
+    return left.args[0].coeff[Variable()]
 
 
 def build_sol(expr, left):
@@ -403,12 +430,12 @@ def build_sol(expr, left):
 def is_simplest(expr):
     if not isinstance(expr, Function):
         raise RuntimeError()
-    elif isinstance(expr.args[0], Variable):
+    if isinstance(expr.args[0], Variable):
         return True
-    elif isinstance(expr.args[0], Mul):
-        if len(expr.args[0].args) == 2:
-            if isinstance(expr.args[0].args[1], Variable):
-                return True
+    if expr.args[0].coeff.get(Variable()) is None:
+        return False
+    if expr.args[0].coeff["addend"] == 0:
+        return True
     return False
 
 
