@@ -73,6 +73,16 @@ class Combination():
                     self.coeff[k] = -v
         return self
 
+    def __repr__(self):
+        result, first = "", True
+        for k, v in self.coeff.items():
+            if k != "addend":
+                result += "%s%s*%s" % ("+" if (self.coeff[k] > 0) and (not first) else "", get_num_string(v), repr(k))
+            first = False
+        if self.coeff["addend"] != 0:
+            result += "%s%s" % ("+" if self.coeff["addend"] > 0 else "", get_num_string(self.coeff["addend"]))
+        return result
+
 
 class MathItem():
 
@@ -702,7 +712,7 @@ if __name__ == "__main__":
                 elif ("<" in args) and ("<=" not in args):
                     inequ(*args.split("<", 1), "<")
                 elif ("<=" in args):
-                    inequ(*args.split("<=", 1), "<")
+                    inequ(*args.split("<=", 1), "<=")
             elif action == "set":
                 set_var(*args.split(" "))
             elif action == "trig":
